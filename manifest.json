@@ -4,8 +4,8 @@
   "description": "Eshcol Technical Services \u2013 Invoice & Accounts Manager",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#e8572a",
+  "background_color": "#F17142",
+  "theme_color": "#F17142",
   "orientation": "portrait",
   "icons": [
     {
