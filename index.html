@@ -566,13 +566,7 @@ const STAMP   = "iVBORw0KGgoAAAANSUhEUgAAAesAAAGvCAYAAAB7Ov3bAAAACXBIWXMAAAsTAAA
 // ══════════════════════════════════════════════
 let items = [{desc:'',qty:1,price:0}];
 
-// Init persisted data on page load
-// ── Core state — declared first so all functions can access them ──
-let seq    = parseInt(localStorage.getItem('ets_seq') || '119');
-let ledger = [];
-try{ ledger = JSON.parse(localStorage.getItem('ets_ledger') || '[]'); }catch(e){ ledger=[]; }
-
-// ── Persistent state – declared FIRST so all code can use them ──
+// ── Persistent state — declared FIRST so all functions can use them ──
 var seq = 119;
 var ledger = [];
 (function(){
@@ -995,10 +989,16 @@ function resetForm(){
 // ── Show status message ──
 function showSavedMsg(text,type){
   const msg=document.getElementById('statusMsg');
-  msg.className='smsg '+(type||'ok');
-  msg.textContent=text;
-  msg.style.display='block';
-  setTimeout(()=>{msg.style.display='none';},5000);
+  if(msg){
+    msg.className='smsg '+(type||'ok');
+    msg.textContent=text;
+    msg.style.display='block';
+    setTimeout(()=>{msg.style.display='none';},5000);
+  }
+  // Fallback alert for when called from Ledger tab (statusMsg not visible)
+  if(!msg && (type==='err' || !type)){
+    setTimeout(()=>alert(text), 50);
+  }
 }
 
 // ── Open/close modal ──
