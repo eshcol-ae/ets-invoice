@@ -291,7 +291,7 @@ table.ledger tr:hover td{background:#fff3ee}
   <div class="nav-btns">
     <button class="nbtn nb-pdf" id="btnPDF" onclick="genPDF()">⬇ PDF</button>
     <button class="nbtn nb-xls" id="btnXLS" onclick="exportExcel()">📊 Excel</button>
-    <button class="nbtn nb-prt" onclick="window.print()">🖨️ Print</button>
+    <button class="nbtn nb-prt" id="btnPRT" onclick="printInv()">🖨️ Print</button>
   </div>
 </div>
 
@@ -531,6 +531,7 @@ table.ledger tr:hover td{background:#fff3ee}
       </select>
       <input id="filterSearch" placeholder="🔍 Search client / invoice #" style="width:200px" oninput="renderLedger()">
       <button class="btn-export-xl" onclick="exportExcel()">📊 Export to Excel</button>
+      <button class="btn-print-ledger" onclick="printLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#0f7abf;color:#fff">🖨️ Print Ledger</button>
     </div>
     <div class="ledger-table-wrap">
       <table class="ledger" id="ledgerTable">
@@ -1192,10 +1193,11 @@ function deleteLedger(id){
 // EXCEL EXPORT — with CDN fallbacks + blob download
 // ══════════════════════════════════════════════
 async function exportExcel(){
+  // btn may be null when called from Ledger tab (no btnXLS there)
   const btn=document.getElementById('btnXLS');
   const msg=document.getElementById('statusMsg');
-  btn.disabled=true;
-  msg.className='smsg info'; msg.textContent='⏳ Building Excel ledger...'; msg.style.display='block';
+  if(btn) btn.disabled=true;
+  if(msg){msg.className='smsg info'; msg.textContent='⏳ Building Excel ledger...'; msg.style.display='block';}
   try{
     // Load SheetJS with multiple CDN fallbacks (Android/iOS/Desktop safe)
     if(!window.XLSX){
@@ -1212,9 +1214,9 @@ async function exportExcel(){
         }catch(e){console.warn('XLSX CDN failed:',cdn,e);}
       }
       if(!loaded){
-        msg.className='smsg err';
-        msg.textContent='❌ Could not load Excel library. Check internet connection.';
-        btn.disabled=false; return;
+        if(msg){msg.className='smsg err';
+        msg.textContent='❌ Could not load Excel library. Check internet connection.';}
+        if(btn) btn.disabled=false; return;
       }
     }
     if(!ledger.length){
@@ -1323,25 +1325,19 @@ async function exportExcel(){
       document.body.appendChild(a); a.click();
       setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1500);
     }
-    msg.className='smsg ok'; msg.textContent='✅ Excel file downloaded successfully!';
+    if(msg){msg.className='smsg ok'; msg.textContent='✅ Excel file downloaded successfully!';}
   }catch(err){
-    msg.className='smsg err'; msg.textContent='❌ Excel error: '+err.message;
+    if(msg){msg.className='smsg err'; msg.textContent='❌ Excel error: '+err.message;}
     console.error(err);
   }
-  btn.disabled=false;
+  if(btn) btn.disabled=false;
 }
 
 // ══════════════════════════════════════════════
 // PDF EXPORT
 // ══════════════════════════════════════════════
-async function genPDF(){
-  const btn=document.getElementById('btnPDF');
-  const msg=document.getElementById('statusMsg');
-  btn.disabled=true; msg.className='smsg info'; msg.textContent='⏳ Generating PDF...'; msg.style.display='block';
-  try{
-    if(!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-    const {jsPDF}=window.jspdf;
-    const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+// Shared PDF builder — used by both Download and Print
+async function buildPdfDoc(doc){
     const W=210, ml=14, mr=14, lx=ml;
     let y=0;
     // Header image
@@ -1481,19 +1477,118 @@ async function genPDF(){
       doc.addPage();
       doc.addImage('data:image/png;base64,'+FOOTER,'PNG',0,297-fH,W,fH);
     }
+}
+
+async function genPDF(){
+  const btn=document.getElementById('btnPDF');
+  const msg=document.getElementById('statusMsg');
+  if(btn) btn.disabled=true;
+  if(msg){msg.className='smsg info';msg.textContent='⏳ Generating PDF...';msg.style.display='block';}
+  try{
+    if(!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+    await buildPdfDoc(doc);
     doc.save('ETS_Invoice_'+gv('invNo')+'.pdf');
-    msg.className='smsg ok'; msg.textContent='✅ PDF downloaded!';
+    if(msg){msg.className='smsg ok';msg.textContent='✅ PDF downloaded!';}
   }catch(err){
-    msg.className='smsg err'; msg.textContent='❌ PDF error: '+err.message; console.error(err);
+    if(msg){msg.className='smsg err';msg.textContent='❌ PDF error: '+err.message;}
+    console.error(err);
   }
-  btn.disabled=false;
+  if(btn) btn.disabled=false;
 }
 
 async function printInv(){
   const btn=document.getElementById('btnPRT');
-  btn.disabled=true;
-  await genPDF();
-  btn.disabled=false;
+  const msg=document.getElementById('statusMsg');
+  if(btn) btn.disabled=true;
+  if(msg){msg.className='smsg info';msg.textContent='⏳ Preparing print...';msg.style.display='block';}
+  try{
+    if(!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+    await buildPdfDoc(doc);
+    // Get PDF as blob and open in new tab for printing
+    const pdfBlob=doc.output('blob');
+    const pdfUrl=URL.createObjectURL(pdfBlob);
+    const printWin=window.open(pdfUrl,'_blank');
+    if(printWin){
+      printWin.onload=()=>{
+        printWin.focus();
+        printWin.print();
+      };
+    } else {
+      // Popup blocked — fallback to download
+      doc.save('ETS_Invoice_'+gv('invNo')+'.pdf');
+    }
+    if(msg){msg.style.display='none';}
+  }catch(err){
+    if(msg){msg.className='smsg err';msg.textContent='❌ Print error: '+err.message;msg.style.display='block';}
+    console.error(err);
+  }
+  if(btn) btn.disabled=false;
+}
+
+// ── Print Ledger — opens a clean print-friendly window ──
+function printLedger(){
+  const rows=ledger;
+  if(!rows.length){alert('No ledger records to print.');return;}
+  const typeLabel={standard:'Standard',downpay:'Down Payment',ipc:'IPC'};
+  const rowsHtml=rows.map((r,i)=>`
+    <tr>
+      <td>${r.invNo}</td>
+      <td>${fmtD(r.date)}</td>
+      <td>${r.clientName||'—'}</td>
+      <td>${typeLabel[r.type]||r.type}</td>
+      <td style="text-align:right">${r.cur} ${fc(r.tot)}</td>
+      <td style="text-align:right">${r.cur} ${fc(r.balance||0)}</td>
+      <td>${fmtD(r.dueDate)}</td>
+      <td style="text-align:center;font-weight:700;color:${r.status==='paid'?'#27ae60':r.status==='unpaid'?'#c0392b':'#f39c12'}">${r.status.toUpperCase()}</td>
+    </tr>`).join('');
+
+  const totInv   = rows.reduce((s,r)=>s+r.tot,0);
+  const totPaid  = rows.filter(r=>r.status==='paid').reduce((s,r)=>s+r.tot,0);
+  const totBal   = rows.reduce((s,r)=>s+(r.balance||0),0);
+
+  const win=window.open('','_blank','width=900,height=700');
+  if(!win){alert('Please allow popups for this site to print the ledger.');return;}
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>ETS Invoice Ledger — Print</title>
+    <meta charset="UTF-8">
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a2e;padding:20px}
+      h1{font-size:16px;color:#e8572a;margin-bottom:2px}
+      .sub{font-size:10px;color:#888;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;margin-bottom:16px}
+      th{background:#e8572a;color:#fff;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase}
+      td{padding:6px 8px;border-bottom:1px solid #eee}
+      tr:nth-child(even) td{background:#fafafa}
+      .summary{display:flex;gap:20px;margin-bottom:20px}
+      .card{background:#fafafa;border:1px solid #e8e8e8;border-radius:6px;padding:10px 16px;flex:1}
+      .card-label{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px}
+      .card-val{font-size:15px;font-weight:700;color:#1a1a2e;margin-top:2px}
+      @media print{body{padding:10px}button{display:none}}
+    </style>
+  </head><body>
+    <h1>Eshcol Technical Services — Invoice Ledger</h1>
+    <div class="sub">TRN: 105437736900003 | info@eshcol.ae | Printed: ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
+    <div class="summary">
+      <div class="card"><div class="card-label">Total Invoiced</div><div class="card-val">AED ${fc(totInv)}</div></div>
+      <div class="card"><div class="card-label">Total Paid</div><div class="card-val">AED ${fc(totPaid)}</div></div>
+      <div class="card"><div class="card-label">Outstanding</div><div class="card-val">AED ${fc(totBal)}</div></div>
+      <div class="card"><div class="card-label">Total Invoices</div><div class="card-val">${rows.length}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Invoice #</th><th>Date</th><th>Client</th><th>Type</th>
+        <th>Amount</th><th>Balance</th><th>Due Date</th><th>Status</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  win.document.close();
 }
 </script>
 </body>
