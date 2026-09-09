@@ -572,16 +572,23 @@ let seq    = parseInt(localStorage.getItem('ets_seq') || '119');
 let ledger = [];
 try{ ledger = JSON.parse(localStorage.getItem('ets_ledger') || '[]'); }catch(e){ ledger=[]; }
 
-window.addEventListener('DOMContentLoaded', function(){
+// ── Persistent state – declared FIRST so all code can use them ──
+var seq = 119;
+var ledger = [];
+(function(){
   try{
-    var sl=localStorage.getItem('ets_ledger');
-    if(sl) ledger=JSON.parse(sl);
     var ss=localStorage.getItem('ets_seq');
-    if(ss) seq=parseInt(ss)||119;
-    var yr=new Date().getFullYear();
-    var el=document.getElementById('invNo');
-    if(el) el.value='ETS-'+yr+'-'+pad(seq);
+    if(ss){ var n=parseInt(ss); if(!isNaN(n)) seq=n; }
+    var sl=localStorage.getItem('ets_ledger');
+    if(sl){ var p=JSON.parse(sl); if(Array.isArray(p)) ledger=p; }
   }catch(e){}
+})();
+
+window.addEventListener('DOMContentLoaded', function(){
+  // Invoice number already set from seq above; update display
+  var yr=new Date().getFullYear();
+  var el=document.getElementById('invNo');
+  if(el) el.value='ETS-'+yr+'-'+pad(seq);
   renderLedger();
   upd();
 });
@@ -947,10 +954,13 @@ function buildRecord(){
 
 // ── Push record to localStorage ledger & increment seq ──
 function pushToLedgerLocal(record){
+  // Add to in-memory array
   ledger.push(record);
-  try{localStorage.setItem('ets_ledger',JSON.stringify(ledger));}catch(e){}
   seq++;
-  try{localStorage.setItem('ets_seq',seq);}catch(e){}
+  // Persist BOTH immediately
+  try{ localStorage.setItem('ets_ledger', JSON.stringify(ledger)); }catch(e){}
+  try{ localStorage.setItem('ets_seq',    String(seq));            }catch(e){}
+  // Reset the form fields then re-render ledger
   resetForm();
   renderLedger();
 }
@@ -1181,9 +1191,17 @@ async function gdSave(){
 // LEDGER RENDER
 // ══════════════════════════════════════════════
 function renderLedger(){
+  // Always reload fresh from localStorage
   try{var raw=localStorage.getItem('ets_ledger');if(raw){var p=JSON.parse(raw);if(Array.isArray(p))ledger=p;}}catch(e){}
-  var fyr=gv('filterYear'); var fmon=gv('filterMonth'); var fst=gv('filterStatus'); var ftp=gv('filterType');
-  var yr=fyr==='all'?'':fyr; var mon=fmon==='all'?'':fmon; var st=fst==='all'?'':fst; var tp=ftp==='all'?'':ftp;
+  // Read filters – treat 'all' as no filter
+  var fyr  = document.getElementById('filterYear')   ? document.getElementById('filterYear').value   : 'all';
+  var fmon = document.getElementById('filterMonth')  ? document.getElementById('filterMonth').value  : 'all';
+  var fst  = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : 'all';
+  var ftp  = document.getElementById('filterType')   ? document.getElementById('filterType').value   : 'all';
+  var yr   = (fyr  === 'all') ? '' : fyr;
+  var mon  = (fmon === 'all') ? '' : fmon;
+  var st   = (fst  === 'all') ? '' : fst;
+  var tp   = (ftp  === 'all') ? '' : ftp;
   const srch= gv('filterSearch').toLowerCase();
   let filtered=ledger.filter(r=>{
     if(yr && !r.date.startsWith(yr)) return false;
@@ -1285,14 +1303,8 @@ async function exportExcel(){
       }
     }
 
-    // Always read fresh from localStorage for Excel export
-    try{
-      var rawLedger = localStorage.getItem('ets_ledger');
-      if(rawLedger){
-        var parsedLedger = JSON.parse(rawLedger);
-        if(Array.isArray(parsedLedger)) ledger = parsedLedger;
-      }
-    }catch(e){ console.warn('Ledger parse error:',e); }
+    // Reload ledger from localStorage before building Excel
+    try{var _xl=localStorage.getItem('ets_ledger');if(_xl){var _xp=JSON.parse(_xl);if(Array.isArray(_xp))ledger=_xp;}}catch(e){}
     // Guard: no records
     if(!ledger || !ledger.length){
       toast('⚠️ No ledger records yet. Save invoices to the ledger first!','err');
