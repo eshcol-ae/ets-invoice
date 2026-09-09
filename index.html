@@ -1193,13 +1193,28 @@ function deleteLedger(id){
 // EXCEL EXPORT — with CDN fallbacks + blob download
 // ══════════════════════════════════════════════
 async function exportExcel(){
-  // btn may be null when called from Ledger tab (no btnXLS there)
-  const btn=document.getElementById('btnXLS');
-  const msg=document.getElementById('statusMsg');
+  // ── Safe references — both elements may be null depending on active tab ──
+  const btn = document.getElementById('btnXLS');
+  const msg = document.getElementById('statusMsg');
+
+  // Universal toast notification that works on ANY tab
+  function toast(text, type){
+    // Try the statusMsg first
+    if(msg){
+      msg.className='smsg '+(type||'info');
+      msg.textContent=text;
+      msg.style.display='block';
+      if(type==='ok') setTimeout(()=>{msg.style.display='none';},4000);
+    }
+    // Always show a browser alert as fallback for errors on ledger tab
+    if(type==='err') { setTimeout(()=>alert(text), 50); }
+  }
+
   if(btn) btn.disabled=true;
-  if(msg){msg.className='smsg info'; msg.textContent='⏳ Building Excel ledger...'; msg.style.display='block';}
+  toast('⏳ Building Excel file...','info');
+
   try{
-    // Load SheetJS with multiple CDN fallbacks (Android/iOS/Desktop safe)
+    // ── Load SheetJS with 3 CDN fallbacks ──
     if(!window.XLSX){
       const xlsxCDNs=[
         'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
@@ -1214,31 +1229,38 @@ async function exportExcel(){
         }catch(e){console.warn('XLSX CDN failed:',cdn,e);}
       }
       if(!loaded){
-        if(msg){msg.className='smsg err';
-        msg.textContent='❌ Could not load Excel library. Check internet connection.';}
-        if(btn) btn.disabled=false; return;
+        toast('❌ Could not load Excel library. Check internet connection.','err');
+        if(btn) btn.disabled=false;
+        return;
       }
     }
-    if(!ledger.length){
-      msg.className='smsg err';
-      msg.textContent='⚠️ No ledger records yet. Save invoices to ledger first!';
-      btn.disabled=false; return;
+
+    // ── Guard: no records ──
+    if(!ledger || !ledger.length){
+      toast('⚠️ No ledger records yet. Save invoices to the ledger first!','err');
+      if(btn) btn.disabled=false;
+      return;
     }
-    const wb=XLSX.utils.book_new();
-    // Group records by year then month
+
+    // ── Build workbook ──
+    const wb = XLSX.utils.book_new();
+
+    // Group by year → month
     const byYearMonth={};
     ledger.forEach(r=>{
       const d=new Date(r.date+'T00:00:00');
       const yr=d.getFullYear(), mn=d.getMonth();
-      if(!byYearMonth[yr])byYearMonth[yr]={};
-      if(!byYearMonth[yr][mn])byYearMonth[yr][mn]=[];
+      if(!byYearMonth[yr]) byYearMonth[yr]={};
+      if(!byYearMonth[yr][mn]) byYearMonth[yr][mn]=[];
       byYearMonth[yr][mn].push(r);
     });
+
     const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    // Dashboard sheet
+
+    // ── Dashboard sheet ──
     const dashRows=[
       ['ESHCOL TECHNICAL SERVICES — ACCOUNTS LEDGER'],
-      ['TRN: 105437736900003  |  info@eshcol.ae  |  +971 52 661 9941'],
+      ['TRN: 105437736900003  |  info@eshcol.ae  |  +971 52 661 9941  |  www.eshcol.ae'],
       [],
       ['Generated:', new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})],
       [],
@@ -1248,8 +1270,8 @@ async function exportExcel(){
     let totInvoiced=0,totPaid=0,totUnpaid=0,totPend=0,totDP=0,totIPC=0,totCount=0;
     Object.keys(byYearMonth).sort().forEach(yr=>{
       for(let m=0;m<12;m++){
-        const recs=byYearMonth[yr][m]||[];
-        if(!recs.length)return;
+        const recs=(byYearMonth[yr]&&byYearMonth[yr][m])||[];
+        if(!recs.length) return;
         const label=MON[m]+'-'+yr;
         const inv  =recs.reduce((s,r)=>s+r.tot,0);
         const paid =recs.filter(r=>r.status==='paid').reduce((s,r)=>s+r.tot,0);
@@ -1265,15 +1287,17 @@ async function exportExcel(){
     const wsDash=XLSX.utils.aoa_to_sheet(dashRows);
     wsDash['!cols']=[{wch:18},{wch:10},{wch:22},{wch:18},{wch:18},{wch:22},{wch:20},{wch:20}];
     XLSX.utils.book_append_sheet(wb,wsDash,'Dashboard');
-    // Monthly sheets
+
+    // ── Monthly sheets ──
     const colHdrs=['Invoice #','Date','Client Name','Description','Invoice Type',
       '% of Contract','Contract Value (AED)','Invoice Amount (AED)',
       'Down Pymt Recd (AED)','IPC Amount (AED)','Amount Paid (AED)',
       'Balance Due (AED)','Due Date','Status','Currency','Notes'];
+
     Object.keys(byYearMonth).sort().forEach(yr=>{
       for(let m=0;m<12;m++){
-        const recs=byYearMonth[yr]?.[m];
-        if(!recs||!recs.length)return;
+        const recs=(byYearMonth[yr]&&byYearMonth[yr][m]);
+        if(!recs||!recs.length) return;
         const sheetName=MON[m]+'-'+yr;
         const rows=[
           ['ESHCOL TECHNICAL SERVICES — INVOICE LEDGER — '+sheetName.toUpperCase()],
@@ -1286,18 +1310,20 @@ async function exportExcel(){
           const pct=r.type==='downpay'?r.dpPct:r.type==='ipc'?r.ipcThisPct:100;
           const amtPaid=r.status==='paid'?r.tot:(r.stdAmtPaid>0?r.stdAmtPaid:0);
           rows.push([
-            r.invNo, r.date, r.clientName,
-            r.items.map(i=>i.desc).filter(Boolean).join('; ')||'—',
+            r.invNo, r.date, r.clientName||'',
+            (r.items||[]).map(i=>i.desc).filter(Boolean).join('; ')||'—',
             typeLabel[r.type]||r.type,
-            pct/100, r.contractVal||'', r.tot,
-            r.dpAmt||'', r.ipcAmt||'', amtPaid,
-            r.balance||0, r.dueDate, r.status.toUpperCase(),
-            r.cur, r.notes
+            (pct||0)/100,
+            r.contractVal||0, r.tot,
+            r.dpAmt||0, r.ipcAmt||0, amtPaid,
+            r.balance||0, r.dueDate||'',
+            (r.status||'').toUpperCase(),
+            r.cur||'AED', r.notes||''
           ]);
         });
-        const n=recs.length;
+        // Totals row
         rows.push([
-          'TOTALS','','','',' ','',
+          'TOTALS','','','','','',
           recs.reduce((s,r)=>s+(r.contractVal||0),0),
           recs.reduce((s,r)=>s+r.tot,0),
           recs.reduce((s,r)=>s+(r.dpAmt||0),0),
@@ -1308,28 +1334,34 @@ async function exportExcel(){
         ]);
         const ws=XLSX.utils.aoa_to_sheet(rows);
         ws['!cols']=[{wch:14},{wch:12},{wch:24},{wch:30},{wch:14},{wch:8},
-                     {wch:18},{wch:18},{wch:18},{wch:18},{wch:16},{wch:16},{wch:12},{wch:10},{wch:8},{wch:30}];
-        XLSX.utils.book_append_sheet(wb,ws,sheetName);
+                     {wch:18},{wch:18},{wch:18},{wch:18},{wch:16},{wch:16},
+                     {wch:12},{wch:10},{wch:8},{wch:30}];
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
     });
-    const yr=new Date().getFullYear();
-    // Download — blob URL fallback for Android/iOS/all browsers
+
+    // ── Download — try writeFile first, blob URL fallback for Android/iOS ──
+    const fileName='ETS_Invoice_Ledger_'+new Date().getFullYear()+'.xlsx';
     try{
-      XLSX.writeFile(wb,'ETS_Invoice_Ledger_'+yr+'.xlsx');
+      XLSX.writeFile(wb, fileName);
     }catch(writeErr){
       const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
       const blob=new Blob([wbout],{type:'application/octet-stream'});
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');
-      a.href=url; a.download='ETS_Invoice_Ledger_'+yr+'.xlsx';
-      document.body.appendChild(a); a.click();
+      a.href=url; a.download=fileName;
+      document.body.appendChild(a);
+      a.click();
       setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},1500);
     }
-    if(msg){msg.className='smsg ok'; msg.textContent='✅ Excel file downloaded successfully!';}
+
+    toast('✅ Excel file downloaded successfully!','ok');
+
   }catch(err){
-    if(msg){msg.className='smsg err'; msg.textContent='❌ Excel error: '+err.message;}
-    console.error(err);
+    toast('❌ Excel error: '+err.message,'err');
+    console.error('exportExcel error:',err);
   }
+
   if(btn) btn.disabled=false;
 }
 
