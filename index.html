@@ -504,9 +504,11 @@ table.ledger tr:hover td{background:#fff3ee}
     <div class="ledger-summary" id="ledgerSummary"></div>
     <div class="ledger-toolbar">
       <select id="filterYear" onchange="renderLedger()">
-        <option value="all">All Years</option>
-        <option value="2026" selected>2026</option>
+        <option value="all" selected>All Years</option>
+        <option value="2025">2025</option>
+        <option value="2026">2026</option>
         <option value="2027">2027</option>
+        <option value="2028">2028</option>
       </select>
       <select id="filterMonth" onchange="renderLedger()">
         <option value="all">All Months</option>
@@ -518,7 +520,7 @@ table.ledger tr:hover td{background:#fff3ee}
         <option value="11">November</option><option value="12">December</option>
       </select>
       <select id="filterStatus" onchange="renderLedger()">
-        <option value="all">All Statuses</option>
+        <option value="all" selected>All Statuses</option>
         <option value="paid">Paid</option>
         <option value="unpaid">Unpaid</option>
         <option value="partial">Partial/Pending</option>
@@ -565,6 +567,11 @@ const STAMP   = "iVBORw0KGgoAAAANSUhEUgAAAesAAAGvCAYAAAB7Ov3bAAAACXBIWXMAAAsTAAA
 let items = [{desc:'',qty:1,price:0}];
 
 // Init persisted data on page load
+// ── Core state — declared first so all functions can access them ──
+let seq    = parseInt(localStorage.getItem('ets_seq') || '119');
+let ledger = [];
+try{ ledger = JSON.parse(localStorage.getItem('ets_ledger') || '[]'); }catch(e){ ledger=[]; }
+
 window.addEventListener('DOMContentLoaded', function(){
   try{
     var sl=localStorage.getItem('ets_ledger');
@@ -578,8 +585,7 @@ window.addEventListener('DOMContentLoaded', function(){
   renderLedger();
   upd();
 });
-let seq   = parseInt(localStorage.getItem('ets_seq') || '119');
-let ledger = JSON.parse(localStorage.getItem('ets_ledger') || '[]');
+// seq and ledger already declared above
 
 // ══════════════════════════════════════════════
 // INIT
@@ -1175,15 +1181,19 @@ async function gdSave(){
 // LEDGER RENDER
 // ══════════════════════════════════════════════
 function renderLedger(){
-  try{var s=localStorage.getItem('ets_ledger');if(s)ledger=JSON.parse(s);}catch(e){}
+  try{var raw=localStorage.getItem('ets_ledger');if(raw){var p=JSON.parse(raw);if(Array.isArray(p))ledger=p;}}catch(e){}
   var fyr=gv('filterYear'); var fmon=gv('filterMonth'); var fst=gv('filterStatus'); var ftp=gv('filterType');
   var yr=fyr==='all'?'':fyr; var mon=fmon==='all'?'':fmon; var st=fst==='all'?'':fst; var tp=ftp==='all'?'':ftp;
   const srch= gv('filterSearch').toLowerCase();
   let filtered=ledger.filter(r=>{
-    if(yr  && !r.date.startsWith(yr)) return false;
-    if(mon && !r.date.startsWith(yr+'-'+mon)) return false;
-    if(st  && r.status!==st) return false;
-    if(tp  && r.type!==tp) return false;
+    if(yr && !r.date.startsWith(yr)) return false;
+    // Month: pad to 2 digits so '9' matches '2026-09' not '2026-09' AND '2026-10' etc
+    if(mon && yr){
+      const mm=mon.padStart(2,'0');
+      if(!r.date.startsWith(yr+'-'+mm)) return false;
+    }
+    if(st && r.status!==st) return false;
+    if(tp && r.type!==tp) return false;
     if(srch && !(
       (r.invNo||'').toLowerCase().includes(srch)||
       (r.clientName||'').toLowerCase().includes(srch)||
@@ -1275,8 +1285,14 @@ async function exportExcel(){
       }
     }
 
-    // Reload fresh from localStorage
-    try{var sl=localStorage.getItem('ets_ledger');if(sl)ledger=JSON.parse(sl);}catch(e){}
+    // Always read fresh from localStorage for Excel export
+    try{
+      var rawLedger = localStorage.getItem('ets_ledger');
+      if(rawLedger){
+        var parsedLedger = JSON.parse(rawLedger);
+        if(Array.isArray(parsedLedger)) ledger = parsedLedger;
+      }
+    }catch(e){ console.warn('Ledger parse error:',e); }
     // Guard: no records
     if(!ledger || !ledger.length){
       toast('⚠️ No ledger records yet. Save invoices to the ledger first!','err');
