@@ -376,7 +376,7 @@ table.ledger tr:hover td{background:#fff3ee}
     <div class="trow gr"><span>Invoice Total</span><span id="fTot">AED 0.00</span></div>
     <div class="trow dp-row" id="fDPRow" style="display:none"><span id="fDPLbl">Down Payment</span><span id="fDP">AED 0.00</span></div>
     <div class="trow ipc-row" id="fIPCRow" style="display:none"><span id="fIPCLbl">IPC Amount</span><span id="fIPC">AED 0.00</span></div>
-    <div class="trow bal-row" id="fBalRow" style="display:none"><span>Balance Due</span><span id="fBal">AED 0.00</span></div>
+    <div class="trow bal-row" id="fBalRow" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #feb2b2"><span>Balance Due</span><span id="fBal">AED 0.00</span></div>
   </div>
 
   <div class="save-btn-wrap">
@@ -563,6 +563,21 @@ const STAMP   = "iVBORw0KGgoAAAANSUhEUgAAAesAAAGvCAYAAAB7Ov3bAAAACXBIWXMAAAsTAAA
 // STATE
 // ══════════════════════════════════════════════
 let items = [{desc:'',qty:1,price:0}];
+
+// Init persisted data on page load
+window.addEventListener('DOMContentLoaded', function(){
+  try{
+    var sl=localStorage.getItem('ets_ledger');
+    if(sl) ledger=JSON.parse(sl);
+    var ss=localStorage.getItem('ets_seq');
+    if(ss) seq=parseInt(ss)||119;
+    var yr=new Date().getFullYear();
+    var el=document.getElementById('invNo');
+    if(el) el.value='ETS-'+yr+'-'+pad(seq);
+  }catch(e){}
+  renderLedger();
+  upd();
+});
 let seq   = parseInt(localStorage.getItem('ets_seq') || '119');
 let ledger = JSON.parse(localStorage.getItem('ets_ledger') || '[]');
 
@@ -930,8 +945,34 @@ function pushToLedgerLocal(record){
   try{localStorage.setItem('ets_ledger',JSON.stringify(ledger));}catch(e){}
   seq++;
   try{localStorage.setItem('ets_seq',seq);}catch(e){}
+  resetForm();
+  renderLedger();
+}
+
+function resetForm(){
   const yr=new Date().getFullYear();
   document.getElementById('invNo').value='ETS-'+yr+'-'+pad(seq);
+  const today=new Date().toISOString().split('T')[0];
+  document.getElementById('invDate').value=today;
+  const due=new Date(); due.setDate(due.getDate()+30);
+  document.getElementById('dueDate').value=due.toISOString().split('T')[0];
+  document.getElementById('invSt').value='unpaid';
+  document.getElementById('invType').value='standard';
+  document.getElementById('cName').value='';
+  document.getElementById('cContact').value='';
+  document.getElementById('cAddr').value='';
+  document.getElementById('cPhone').value='';
+  document.getElementById('cEmail').value='';
+  document.getElementById('cTRN').value='';
+  items=[{desc:'',qty:1,price:0}];
+  renderItems();
+  document.getElementById('disc').value='0';
+  document.getElementById('vat').value='5';
+  document.getElementById('notes').value='';
+  ['contractVal','contractRef','dpPct','ipcNo','ipcCumPct','ipcPrevPct','amtPaid'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.value='';
+  });
   upd();
 }
 
@@ -1134,10 +1175,9 @@ async function gdSave(){
 // LEDGER RENDER
 // ══════════════════════════════════════════════
 function renderLedger(){
-  const yr  = gv('filterYear');
-  const mon = gv('filterMonth');
-  const st  = gv('filterStatus');
-  const tp  = gv('filterType');
+  try{var s=localStorage.getItem('ets_ledger');if(s)ledger=JSON.parse(s);}catch(e){}
+  var fyr=gv('filterYear'); var fmon=gv('filterMonth'); var fst=gv('filterStatus'); var ftp=gv('filterType');
+  var yr=fyr==='all'?'':fyr; var mon=fmon==='all'?'':fmon; var st=fst==='all'?'':fst; var tp=ftp==='all'?'':ftp;
   const srch= gv('filterSearch').toLowerCase();
   let filtered=ledger.filter(r=>{
     if(yr  && !r.date.startsWith(yr)) return false;
@@ -1235,7 +1275,9 @@ async function exportExcel(){
       }
     }
 
-    // ── Guard: no records ──
+    // Reload fresh from localStorage
+    try{var sl=localStorage.getItem('ets_ledger');if(sl)ledger=JSON.parse(sl);}catch(e){}
+    // Guard: no records
     if(!ledger || !ledger.length){
       toast('⚠️ No ledger records yet. Save invoices to the ledger first!','err');
       if(btn) btn.disabled=false;
@@ -1471,7 +1513,7 @@ async function buildPdfDoc(doc){
     // Balance due
     if(t.balance>0&&t.type!=='standard'){
       doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(192,57,43);
-      doc.text('BALANCE DUE: '+fc2(t.balance,gv('cur')),W-mr,y,{align:'right'}); y+=6;
+      doc.text('BALANCE DUE:   '+fc2(t.balance,gv('cur')),W-mr,y,{align:'right'}); y+=6;
     }
     y+=2;
     // Notes
