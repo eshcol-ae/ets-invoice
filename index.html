@@ -531,9 +531,9 @@ table.ledger tr:hover td{background:#fff3ee}
         <option value="downpay">Down Payment</option>
         <option value="ipc">IPC</option>
       </select>
-      <input id="filterSearch" placeholder="🔍 Search client / invoice #" style="width:180px" onkeydown="if(event.key==='Enter')renderLedger()">
-      <button onclick="renderLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#e8572a;color:#fff">🔍 Search</button>
-      <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#888;color:#fff">✕ Clear</button>
+      <input id="filterSearch" placeholder="🔍 Search invoice # or client" style="min-width:180px;flex:1" onkeydown="if(event.key==='Enter')renderLedger()">
+      <button onclick="renderLedger()" style="padding:7px 16px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#e8572a;color:#fff;white-space:nowrap">🔍 Search</button>
+      <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#666;color:#fff;white-space:nowrap">✕ Clear</button>
       <button class="btn-export-xl" onclick="exportExcel()">📊 Export to Excel</button>
       <button class="btn-print-ledger" onclick="printLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#0f7abf;color:#fff">🖨️ Print Ledger</button>
     </div>
@@ -950,13 +950,11 @@ function buildRecord(){
 
 // ── Push record to localStorage ledger & increment seq ──
 function pushToLedgerLocal(record){
-  // Add to in-memory array
   ledger.push(record);
   seq++;
-  // Persist BOTH immediately
   try{ localStorage.setItem('ets_ledger', JSON.stringify(ledger)); }catch(e){}
   try{ localStorage.setItem('ets_seq',    String(seq));            }catch(e){}
-  // Reset filters so the new record is always visible
+  // Reset ALL filters so the new record is ALWAYS visible
   var fyEl=document.getElementById('filterYear');
   var fmEl=document.getElementById('filterMonth');
   var fsEl=document.getElementById('filterStatus');
@@ -967,10 +965,9 @@ function pushToLedgerLocal(record){
   if(fsEl) fsEl.value='all';
   if(ftEl) ftEl.value='all';
   if(fqEl) fqEl.value='';
-  // Reset form and re-render
   resetForm();
   renderLedger();
-  // Auto-switch to Invoice Ledger tab so user sees the saved record
+  // Auto-switch to Invoice Ledger tab
   var ledTab=document.querySelector('.tab[onclick*="ledger"]');
   if(ledTab) switchTab('ledger', ledTab);
 }
@@ -1016,8 +1013,11 @@ function showSavedMsg(text,type){
 
 // ── Open/close modal ──
 function saveToLedger(){
-  document.getElementById('gdOverlay').classList.add('show');
-  refreshGdUI();
+  // Save directly to device — no popup, instant save
+  const record = buildRecord();
+  if(!record.invNo){ alert('Please fill in Invoice details before saving.'); return; }
+  pushToLedgerLocal(record);
+  showSavedMsg('✅ Invoice #'+record.invNo+' saved to Ledger!','ok');
 }
 function closeGdModal(){
   document.getElementById('gdOverlay').classList.remove('show');
@@ -1204,16 +1204,10 @@ async function gdSave(){
 // LEDGER RENDER
 // ══════════════════════════════════════════════
 function clearLedgerFilters(){
-  var fyEl=document.getElementById('filterYear');
-  var fmEl=document.getElementById('filterMonth');
-  var fsEl=document.getElementById('filterStatus');
-  var ftEl=document.getElementById('filterType');
-  var fqEl=document.getElementById('filterSearch');
-  if(fyEl) fyEl.value='all';
-  if(fmEl) fmEl.value='all';
-  if(fsEl) fsEl.value='all';
-  if(ftEl) ftEl.value='all';
-  if(fqEl) fqEl.value='';
+  ['filterYear','filterMonth','filterStatus','filterType'].forEach(id=>{
+    var el=document.getElementById(id); if(el) el.value='all';
+  });
+  var fq=document.getElementById('filterSearch'); if(fq) fq.value='';
   renderLedger();
 }
 
@@ -1288,14 +1282,11 @@ function deleteLedger(id){
 // EXCEL EXPORT — with CDN fallbacks + blob download
 // ══════════════════════════════════════════════
 async function exportExcel(){
-  // ── Safe references — both elements may be null depending on active tab ──
   const btn = document.getElementById('btnXLS');
   const msg = document.getElementById('statusMsg');
-
-  // Reload ledger fresh from localStorage before building Excel
+  // Always reload fresh from localStorage
   try{var _xl=localStorage.getItem('ets_ledger');if(_xl){var _xp=JSON.parse(_xl);if(Array.isArray(_xp))ledger=_xp;}}catch(e){}
 
-  // Universal toast notification that works on ANY tab
   function toast(text, type){
     // Try the statusMsg first
     if(msg){
