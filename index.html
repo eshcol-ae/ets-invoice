@@ -531,7 +531,9 @@ table.ledger tr:hover td{background:#fff3ee}
         <option value="downpay">Down Payment</option>
         <option value="ipc">IPC</option>
       </select>
-      <input id="filterSearch" placeholder="🔍 Search client / invoice #" style="width:200px" oninput="renderLedger()">
+      <input id="filterSearch" placeholder="🔍 Search client / invoice #" style="width:180px" onkeydown="if(event.key==='Enter')renderLedger()">
+      <button onclick="renderLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#e8572a;color:#fff">🔍 Search</button>
+      <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#888;color:#fff">✕ Clear</button>
       <button class="btn-export-xl" onclick="exportExcel()">📊 Export to Excel</button>
       <button class="btn-print-ledger" onclick="printLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#0f7abf;color:#fff">🖨️ Print Ledger</button>
     </div>
@@ -954,9 +956,23 @@ function pushToLedgerLocal(record){
   // Persist BOTH immediately
   try{ localStorage.setItem('ets_ledger', JSON.stringify(ledger)); }catch(e){}
   try{ localStorage.setItem('ets_seq',    String(seq));            }catch(e){}
-  // Reset the form fields then re-render ledger
+  // Reset filters so the new record is always visible
+  var fyEl=document.getElementById('filterYear');
+  var fmEl=document.getElementById('filterMonth');
+  var fsEl=document.getElementById('filterStatus');
+  var ftEl=document.getElementById('filterType');
+  var fqEl=document.getElementById('filterSearch');
+  if(fyEl) fyEl.value='all';
+  if(fmEl) fmEl.value='all';
+  if(fsEl) fsEl.value='all';
+  if(ftEl) ftEl.value='all';
+  if(fqEl) fqEl.value='';
+  // Reset form and re-render
   resetForm();
   renderLedger();
+  // Auto-switch to Invoice Ledger tab so user sees the saved record
+  var ledTab=document.querySelector('.tab[onclick*="ledger"]');
+  if(ledTab) switchTab('ledger', ledTab);
 }
 
 function resetForm(){
@@ -995,10 +1011,7 @@ function showSavedMsg(text,type){
     msg.style.display='block';
     setTimeout(()=>{msg.style.display='none';},5000);
   }
-  // Fallback alert for when called from Ledger tab (statusMsg not visible)
-  if(!msg && (type==='err' || !type)){
-    setTimeout(()=>alert(text), 50);
-  }
+  if(!msg && type==='err') setTimeout(()=>alert(text),50);
 }
 
 // ── Open/close modal ──
@@ -1190,6 +1203,20 @@ async function gdSave(){
 // ══════════════════════════════════════════════
 // LEDGER RENDER
 // ══════════════════════════════════════════════
+function clearLedgerFilters(){
+  var fyEl=document.getElementById('filterYear');
+  var fmEl=document.getElementById('filterMonth');
+  var fsEl=document.getElementById('filterStatus');
+  var ftEl=document.getElementById('filterType');
+  var fqEl=document.getElementById('filterSearch');
+  if(fyEl) fyEl.value='all';
+  if(fmEl) fmEl.value='all';
+  if(fsEl) fsEl.value='all';
+  if(ftEl) ftEl.value='all';
+  if(fqEl) fqEl.value='';
+  renderLedger();
+}
+
 function renderLedger(){
   // Always reload fresh from localStorage
   try{var raw=localStorage.getItem('ets_ledger');if(raw){var p=JSON.parse(raw);if(Array.isArray(p))ledger=p;}}catch(e){}
@@ -1264,6 +1291,9 @@ async function exportExcel(){
   // ── Safe references — both elements may be null depending on active tab ──
   const btn = document.getElementById('btnXLS');
   const msg = document.getElementById('statusMsg');
+
+  // Reload ledger fresh from localStorage before building Excel
+  try{var _xl=localStorage.getItem('ets_ledger');if(_xl){var _xp=JSON.parse(_xl);if(Array.isArray(_xp))ledger=_xp;}}catch(e){}
 
   // Universal toast notification that works on ANY tab
   function toast(text, type){
