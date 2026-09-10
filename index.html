@@ -1225,17 +1225,17 @@ function renderLedger(){
   var totPaid = filtered.filter(function(r){return r.status==='paid';}).reduce(function(s,r){return s+(r.tot||0);},0);
   var totUnp  = filtered.filter(function(r){return r.status==='unpaid';}).reduce(function(s,r){return s+(r.tot||0);},0);
   var totBal  = filtered.reduce(function(s,r){return s+(r.balance||0);},0);
-  var kpiInv  = document.getElementById('kpiInv');  if(kpiInv)  kpiInv.textContent  = 'AED '+fc(totInv);
-  var kpiPaid = document.getElementById('kpiPaid'); if(kpiPaid) kpiPaid.textContent = 'AED '+fc(totPaid);
-  var kpiUnp  = document.getElementById('kpiUnp');  if(kpiUnp)  kpiUnp.textContent  = 'AED '+fc(totUnp);
-  var kpiBal  = document.getElementById('kpiBal');  if(kpiBal)  kpiBal.textContent  = 'AED '+fc(totBal);
+  var kpiInv  = document.getElementById('kpiInv');  if(kpiInv)  kpiInv.textContent  = fc(totInv);
+  var kpiPaid = document.getElementById('kpiPaid'); if(kpiPaid) kpiPaid.textContent = fc(totPaid);
+  var kpiUnp  = document.getElementById('kpiUnp');  if(kpiUnp)  kpiUnp.textContent  = fc(totUnp);
+  var kpiBal  = document.getElementById('kpiBal');  if(kpiBal)  kpiBal.textContent  = fc(totBal);
   // Update summary div if present
   var sumDiv = document.getElementById('ledgerSummary');
   if(sumDiv){
     sumDiv.innerHTML='<div style="display:flex;gap:16px;padding:10px 0;flex-wrap:wrap">'
-      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:15px">AED '+fc(totInv)+'</div></div>'
-      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:15px">AED '+fc(totPaid)+'</div></div>'
-      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">OUTSTANDING</div><div style="font-weight:700;color:#f57f17;font-size:15px">AED '+fc(totUnp)+'</div></div>'
+      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:15px">'+fc(totInv)+'</div></div>'
+      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:15px">'+fc(totPaid)+'</div></div>'
+      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">OUTSTANDING</div><div style="font-weight:700;color:#f57f17;font-size:15px">'+fc(totUnp)+'</div></div>'
       +'<div style="background:#fce4ec;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL RECORDS</div><div style="font-weight:700;color:#c62828;font-size:15px">'+filtered.length+'</div></div>'
       +'</div>';
   }
