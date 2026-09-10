@@ -1614,10 +1614,13 @@ async function buildPdfDoc(doc){
     else if(t.type==='ipc')doc.text('IPC AMOUNT',totX,y+5.5);
     else doc.text('INVOICE TOTAL',totX,y+5.5);
     doc.text(fc2(t.tot,gv('cur')),W-mr,y+5.5,{align:'right'}); y+=10;
-    // Balance due
-    if(t.balance>0&&t.type!=='standard'){
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(192,57,43);
-      doc.text('BALANCE DUE:   '+fc2(t.balance,gv('cur')),W-mr,y,{align:'right'}); y+=6;
+    // Balance due — shown for ALL types when balance remains
+    if(t.balance>0){
+      doc.setFillColor(250,220,220); doc.rect(totX-2,y,totW+2,7,'F');
+      doc.setDrawColor(192,57,43); doc.rect(totX-2,y,totW+2,7,'S');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(192,57,43);
+      doc.text('BALANCE DUE:',totX,y+4.8);
+      doc.text(fc2(t.balance,gv('cur')),W-mr,y+4.8,{align:'right'}); y+=10;
     }
     y+=2;
     // Notes
