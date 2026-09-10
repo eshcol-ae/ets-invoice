@@ -263,6 +263,31 @@ table.ledger tr:hover td{background:#fff3ee}
 .gd-connected-bar.show{display:block}
 .gd-connected-email{font-size:11px;color:#1e8a4a;font-weight:700}
 .gd-sheet-info{font-size:10px;color:#555;margin-top:3px}
+
+/* ── Post-Update Modal ── */
+.pu-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:99998;display:none;align-items:center;justify-content:center;}
+.pu-overlay.show{display:flex!important}
+.pu-modal{background:#fff;border-radius:14px;padding:28px 30px;width:94%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.35);font-family:'Roboto',sans-serif;max-height:90vh;overflow-y:auto;}
+.pu-title{font-size:15px;font-weight:700;color:#e8572a;margin-bottom:18px;border-bottom:2px solid #e8572a;padding-bottom:8px;}
+.pu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.pu-field{display:flex;flex-direction:column;gap:4px;}
+.pu-field label{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;}
+.pu-field input,.pu-field select{padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'Roboto',sans-serif;}
+.pu-field input:focus,.pu-field select:focus{outline:none;border-color:#e8572a;}
+.pu-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;}
+.pu-btn{padding:9px 20px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;}
+.pu-btn-save{background:#e8572a;color:#fff;}
+.pu-btn-cancel{background:#f0f0f0;color:#555;}
+/* ── Action buttons ── */
+.act-btn{border:none;border-radius:5px;padding:4px 7px;cursor:pointer;font-size:11px;font-weight:700;margin:1px;}
+.act-pdf{background:#e8572a;color:#fff;}
+.act-edit{background:#27ae60;color:#fff;}
+.act-update{background:#2980b9;color:#fff;}
+.act-del{background:#e74c3c;color:#fff;}
+/* ── GD sync status chip ── */
+.gd-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 10px;border-radius:20px;background:#e8f5e9;color:#2e7d32;font-weight:600;}
+.gd-chip.off{background:#fce4ec;color:#c62828;}
+
 </style>
 <!-- Google Drive Save Modal -->
 <div class="gd-overlay" id="gdOverlay">
@@ -536,6 +561,8 @@ table.ledger tr:hover td{background:#fff3ee}
       <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;background:#555;color:#fff">✕ Clear</button>
       <button class="btn-export-xl" onclick="exportExcel()">📊 Export to Excel</button>
       <button class="btn-print-ledger" onclick="printLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#0f7abf;color:#fff">🖨️ Print Ledger</button>
+      <button onclick="syncAllToDrive()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#34a853;color:#fff">☁️ Sync to Drive</button>
+      <span id="gdChip" class="gd-chip off" style="white-space:nowrap">⬤ Not connected</span>
     </div>
     <div class="ledger-table-wrap">
       <table class="ledger" id="ledgerTable">
@@ -614,7 +641,7 @@ function switchTab(name, el){
   document.getElementById('tab-ledger').style.display  = name==='ledger' ?'flex':'none';
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
-  if(name==='ledger') renderLedger();
+  if(name==='ledger'){ renderLedger(); updateGdChip(); }
 }
 
 // ══════════════════════════════════════════════
@@ -1005,7 +1032,11 @@ function saveToLedger(){
   var record = buildRecord();
   if(!record.invNo){ alert('Please fill in the Invoice Number before saving.'); return; }
   pushToLedgerLocal(record);
-  showSavedMsg('✅ Invoice #'+record.invNo+' saved! Check Invoice Ledger tab.','ok');
+  showSavedMsg('✅ Invoice #'+record.invNo+' saved locally!','ok');
+  // Auto-sync to Drive if already connected
+  if(gdAccessToken && gdSpreadsheetId){
+    setTimeout(function(){ syncAllToDrive(true); }, 800);
+  }
 }
 function closeGdModal(){
   document.getElementById('gdOverlay').classList.remove('show');
@@ -1265,7 +1296,11 @@ function renderLedger(){
       +'<td style="text-align:right">'+fc2(r.balance||0,r.cur)+'</td>'
       +'<td>'+fmtD(r.dueDate)+'</td>'
       +'<td><span class="badge badge-'+(r.status||'unpaid')+'">'+(r.status||'unpaid').toUpperCase()+'</span></td>'
-      +'<td><button onclick="deleteLedger('+(r.id||0)+')" style="background:#e74c3c;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px">🗑</button></td>'
+      +'<td style="white-space:nowrap">'
+      +'<button class="act-btn act-pdf"    onclick="viewPdfLedger('+(r.id||0)+')">📄</button>'
+      +'<button class="act-btn act-update" onclick="openPostUpdate('+(r.id||0)+')">📝</button>'
+      +'<button class="act-btn act-del"    onclick="deleteLedger('+(r.id||0)+')">🗑</button>'
+      +'</td>'
     +'</tr>';
   }).join('');
 }
@@ -1725,9 +1760,307 @@ function printLedger(){
       <tbody>${rowsHtml}</tbody>
     </table>
     <script>window.onload=()=>{window.print();}<\/script>
-  </body></html>`);
+  
+<!-- ── Post-Update Modal ── -->
+<div id="puOverlay" class="pu-overlay" onclick="if(event.target===this)closePuModal()">
+  <div class="pu-modal">
+    <div class="pu-title">📋 Post Update — <span id="puInvNo"></span></div>
+    <input type="hidden" id="puRecordId">
+    <div class="pu-grid">
+      <div class="pu-field">
+        <label>Invoice Type</label>
+        <input id="puType" readonly style="background:#f8f8f8;color:#888;">
+      </div>
+      <div class="pu-field">
+        <label>Status</label>
+        <select id="puStatus">
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial / Pending</option>
+          <option value="paid">Paid</option>
+        </select>
+      </div>
+      <div class="pu-field">
+        <label>Contract Value (AED)</label>
+        <input type="number" id="puContractVal" min="0" step="0.01">
+      </div>
+      <div class="pu-field">
+        <label>Invoice Amount (AED)</label>
+        <input type="number" id="puTot" min="0" step="0.01" readonly style="background:#f8f8f8;">
+      </div>
+      <div class="pu-field">
+        <label>Down Payment Received (AED)</label>
+        <input type="number" id="puDpAmt" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="pu-field">
+        <label>IPC Amount (AED)</label>
+        <input type="number" id="puIpcAmt" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="pu-field">
+        <label>Amount Paid (AED)</label>
+        <input type="number" id="puAmtPaid" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="pu-field">
+        <label>Balance Due (AED)</label>
+        <input type="number" id="puBalance" readonly style="background:#f8f8f8;color:#c0392b;font-weight:700;">
+      </div>
+      <div class="pu-field">
+        <label>Due Date</label>
+        <input type="date" id="puDueDate">
+      </div>
+      <div class="pu-field">
+        <label>Notes / Remarks</label>
+        <input type="text" id="puNotes" placeholder="Optional note">
+      </div>
+    </div>
+    <div id="puMsg" style="font-size:12px;color:#e8572a;min-height:18px;margin-bottom:6px;"></div>
+    <div class="pu-btns">
+      <button class="pu-btn pu-btn-cancel" onclick="closePuModal()">Cancel</button>
+      <button class="pu-btn pu-btn-save" onclick="savePostUpdate()">💾 Save Update</button>
+    </div>
+  </div>
+</div>
+
+</body></html>`);
   win.document.close();
 }
+
+
+// ══════════════════════════════════════════════
+// POST UPDATE MODAL
+// ══════════════════════════════════════════════
+function openPostUpdate(id){
+  var r = ledger.find(function(x){return x.id===id;});
+  if(!r){ alert('Record not found.'); return; }
+  document.getElementById('puRecordId').value = id;
+  document.getElementById('puInvNo').textContent = r.invNo||'';
+  document.getElementById('puType').value = ({standard:'Standard Invoice',downpay:'Down Payment',ipc:'IPC'}[r.type]||r.type||'');
+  document.getElementById('puStatus').value = r.status||'unpaid';
+  document.getElementById('puContractVal').value = r.contractVal||r.tot||0;
+  document.getElementById('puTot').value = r.tot||0;
+  document.getElementById('puDpAmt').value = r.dpAmt||0;
+  document.getElementById('puIpcAmt').value = r.ipcAmt||0;
+  document.getElementById('puAmtPaid').value = r.status==='paid'?(r.tot||0):(r.stdAmtPaid||0);
+  document.getElementById('puBalance').value = r.balance||0;
+  document.getElementById('puDueDate').value = r.dueDate||'';
+  document.getElementById('puNotes').value = r.notes||'';
+  document.getElementById('puMsg').textContent='';
+  // Live balance calc
+  ['puDpAmt','puIpcAmt','puAmtPaid'].forEach(function(fid){
+    document.getElementById(fid).oninput = calcPuBalance;
+  });
+  document.getElementById('puOverlay').classList.add('show');
+}
+function calcPuBalance(){
+  var tot    = parseFloat(document.getElementById('puTot').value)||0;
+  var paid   = parseFloat(document.getElementById('puAmtPaid').value)||0;
+  var bal    = Math.max(0, tot - paid);
+  document.getElementById('puBalance').value = bal.toFixed(2);
+}
+function closePuModal(){
+  document.getElementById('puOverlay').classList.remove('show');
+}
+function savePostUpdate(){
+  var id   = parseInt(document.getElementById('puRecordId').value);
+  var idx  = ledger.findIndex(function(x){return x.id===id;});
+  if(idx===-1){ alert('Record not found.'); return; }
+  var r    = ledger[idx];
+  var paid = parseFloat(document.getElementById('puAmtPaid').value)||0;
+  var tot  = parseFloat(document.getElementById('puTot').value)||0;
+  // Update fields
+  r.contractVal  = parseFloat(document.getElementById('puContractVal').value)||0;
+  r.dpAmt        = parseFloat(document.getElementById('puDpAmt').value)||0;
+  r.ipcAmt       = parseFloat(document.getElementById('puIpcAmt').value)||0;
+  r.stdAmtPaid   = paid;
+  r.balance      = Math.max(0, tot - paid);
+  r.status       = document.getElementById('puStatus').value;
+  r.dueDate      = document.getElementById('puDueDate').value;
+  r.notes        = document.getElementById('puNotes').value;
+  r.updatedAt    = new Date().toISOString();
+  // If paid fully, mark paid
+  if(paid >= tot && tot > 0) r.status = 'paid';
+  ledger[idx] = r;
+  try{localStorage.setItem('ets_ledger', JSON.stringify(ledger));}catch(e){}
+  closePuModal();
+  renderLedger();
+  showSavedMsg('✅ Invoice #'+r.invNo+' updated successfully!','ok');
+  // Auto-sync to Drive if connected
+  if(gdAccessToken && gdSpreadsheetId){
+    syncAllToDrive(true);
+  }
+}
+
+// ── View PDF from Ledger row ──
+function viewPdfLedger(id){
+  var r = ledger.find(function(x){return x.id===id;});
+  if(!r){ alert('Record not found.'); return; }
+  // Populate the form fields so buildPdfDoc() works, then generate PDF
+  // We build PDF directly from the record
+  genPdfFromRecord(r);
+}
+async function genPdfFromRecord(r){
+  if(!window.jspdf){
+    try{ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'); }catch(e){ alert('Could not load PDF library.'); return; }
+  }
+  // Temporarily load record into the form so buildPdfDoc() can use gv()
+  var fields={
+    invNo:r.invNo||'', invDate:r.date||'', dueDate:r.dueDate||'',
+    invSt:r.status||'unpaid', cur:r.cur||'AED', invType:r.type||'standard',
+    cName:r.clientName||'', cContact:r.clientContact||'', cAddr:r.clientAddr||'',
+    cPhone:r.clientPhone||'', cEmail:r.clientEmail||'', cTRN:r.clientTRN||'',
+    notes:r.notes||''
+  };
+  // Save current form state, inject record, build PDF, restore
+  var saved={};
+  Object.keys(fields).forEach(function(k){
+    var el=document.getElementById(k);
+    if(el){saved[k]=el.value; el.value=fields[k];}
+  });
+  // Restore items
+  var savedItems = JSON.parse(JSON.stringify(items));
+  items = r.items&&r.items.length ? JSON.parse(JSON.stringify(r.items)) : [];
+  renderItems();
+  var doc = buildPdfDoc();
+  // Restore
+  Object.keys(saved).forEach(function(k){var el=document.getElementById(k);if(el)el.value=saved[k];});
+  items = savedItems;
+  renderItems();
+  // Download
+  doc.save('Invoice_'+r.invNo+'.pdf');
+}
+
+// ══════════════════════════════════════════════
+// GOOGLE DRIVE — AUTO SYNC + MANUAL SYNC
+// ══════════════════════════════════════════════
+function updateGdChip(){
+  var chip = document.getElementById('gdChip');
+  if(!chip) return;
+  if(gdAccessToken && gdSpreadsheetId){
+    chip.className='gd-chip';
+    chip.textContent='⬤ Drive: '+gdUserEmailVal;
+  } else if(gdAccessToken){
+    chip.className='gd-chip';
+    chip.textContent='⬤ Connecting...';
+  } else {
+    chip.className='gd-chip off';
+    chip.textContent='⬤ Not connected';
+  }
+}
+
+async function syncAllToDrive(silent){
+  // Reload fresh ledger
+  try{var _s=localStorage.getItem('ets_ledger');if(_s){var _p=JSON.parse(_s);if(Array.isArray(_p))ledger=_p;}}catch(e){}
+  if(!ledger||!ledger.length){
+    if(!silent) showSavedMsg('⚠️ Nothing to sync — no records saved yet.','ok');
+    return;
+  }
+  // Connect if needed
+  if(!gdAccessToken){
+    var chip=document.getElementById('gdChip');
+    if(chip){chip.className='gd-chip';chip.textContent='⬤ Signing in...';}
+    var ok = await requestGoogleToken();
+    updateGdChip();
+    if(!ok){ showSavedMsg('❌ Google sign-in failed or cancelled.','err'); return; }
+  }
+  if(!gdSpreadsheetId) await findOrCreateSheet();
+  updateGdChip();
+  if(!silent) showSavedMsg('⏳ Syncing '+ledger.length+' records to Google Drive...','ok');
+  try{
+    // Clear existing data (from row 2 onwards) and re-write all rows
+    // First clear the sheet data rows
+    var clearUrl='https://sheets.googleapis.com/v4/spreadsheets/'+gdSpreadsheetId+'/values/Ledger!A2:Z5000:clear';
+    await fetch(clearUrl,{method:'POST',headers:{Authorization:'Bearer '+gdAccessToken,'Content-Type':'application/json'}});
+    // Build all rows
+    var typeLabel={standard:'Standard Invoice',downpay:'Down Payment',ipc:'IPC'};
+    var rows = ledger.map(function(r){
+      var amtPaid = r.status==='paid'?(r.tot||0):(r.stdAmtPaid||0);
+      return [
+        r.invNo||'', r.date||'', r.clientName||'',
+        typeLabel[r.type]||r.type||'',
+        r.tot||0, r.va||0,
+        (r.status||'unpaid').toUpperCase(),
+        r.dpAmt||0, r.ipcAmt||0, amtPaid,
+        r.balance||0, r.contractVal||r.tot||0,
+        r.dueDate||'', r.cur||'AED', r.notes||'',
+        r.savedAt||'', r.updatedAt||''
+      ];
+    });
+    // Write in batches of 50
+    var batchSize=50;
+    for(var i=0;i<rows.length;i+=batchSize){
+      var batch=rows.slice(i,i+batchSize);
+      await sheetsAppend(batch);
+    }
+    updateGdChip();
+    var chip=document.getElementById('gdChip');
+    if(chip){chip.className='gd-chip';chip.textContent='✅ Synced '+ledger.length+' records';}
+    if(!silent) showSavedMsg('✅ '+ledger.length+' records synced to Google Drive!','ok');
+    setTimeout(updateGdChip, 4000);
+  }catch(e){
+    showSavedMsg('⚠️ Sync partial: '+e.message,'ok');
+  }
+}
+
+
 </script>
+
+<!-- ── Post-Update Modal ── -->
+<div id="puOverlay" class="pu-overlay" onclick="if(event.target===this)closePuModal()">
+  <div class="pu-modal">
+    <div class="pu-title">📋 Post Update — <span id="puInvNo"></span></div>
+    <input type="hidden" id="puRecordId">
+    <div class="pu-grid">
+      <div class="pu-field">
+        <label>Invoice Type</label>
+        <input id="puType" readonly style="background:#f8f8f8;color:#888;">
+      </div>
+      <div class="pu-field">
+        <label>Status</label>
+        <select id="puStatus">
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial / Pending</option>
+          <option value="paid">Paid</option>
+        </select>
+      </div>
+      <div class="pu-field">
+        <label>Contract Value (AED)</label>
+        <input type="number" id="puContractVal" min="0" step="0.01">
+      </div>
+      <div class="pu-field">
+        <label>Invoice Amount (AED)</label>
+        <input type="number" id="puTot" min="0" step="0.01" readonly style="background:#f8f8f8;">
+      </div>
+      <div class="pu-field">
+        <label>Down Payment Received (AED)</label>
+        <input type="number" id="puDpAmt" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="pu-field">
+        <label>IPC Amount (AED)</label>
+        <input type="number" id="puIpcAmt" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="pu-field">
+        <label>Amount Paid (AED)</label>
+        <input type="number" id="puAmtPaid" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="pu-field">
+        <label>Balance Due (AED)</label>
+        <input type="number" id="puBalance" readonly style="background:#f8f8f8;color:#c0392b;font-weight:700;">
+      </div>
+      <div class="pu-field">
+        <label>Due Date</label>
+        <input type="date" id="puDueDate">
+      </div>
+      <div class="pu-field">
+        <label>Notes / Remarks</label>
+        <input type="text" id="puNotes" placeholder="Optional note">
+      </div>
+    </div>
+    <div id="puMsg" style="font-size:12px;color:#e8572a;min-height:18px;margin-bottom:6px;"></div>
+    <div class="pu-btns">
+      <button class="pu-btn pu-btn-cancel" onclick="closePuModal()">Cancel</button>
+      <button class="pu-btn pu-btn-save" onclick="savePostUpdate()">💾 Save Update</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
