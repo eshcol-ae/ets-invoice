@@ -1718,14 +1718,14 @@ function printLedger(){
       <td>${fmtD(r.date)}</td>
       <td>${r.clientName||'—'}</td>
       <td>${typeLabel[r.type]||r.type}</td>
-      <td style="text-align:right">${r.cur} ${fc(r.tot)}</td>
-      <td style="text-align:right">${r.cur} ${fc(r.balance||0)}</td>
+      <td style="text-align:right">${fc2(r.tot,r.cur)}</td>
+      <td style="text-align:right">${fc2(r.balance||0,r.cur)}</td>
       <td>${fmtD(r.dueDate)}</td>
       <td style="text-align:center;font-weight:700;color:${r.status==='paid'?'#27ae60':r.status==='unpaid'?'#c0392b':'#f39c12'}">${r.status.toUpperCase()}</td>
     </tr>`).join('');
 
   const totInv   = rows.reduce((s,r)=>s+r.tot,0);
-  const totPaid  = rows.filter(r=>r.status==='paid').reduce((s,r)=>s+r.tot,0);
+  const totPaid  = rows.reduce((s,r)=>r.status==='paid'?s+(r.tot||0):s+(r.stdAmtPaid||0),0);
   const totBal   = rows.reduce((s,r)=>s+(r.balance||0),0);
 
   const win=window.open('','_blank','width=900,height=700');
@@ -1752,9 +1752,9 @@ function printLedger(){
     <h1>Eshcol Technical Services — Invoice Ledger</h1>
     <div class="sub">TRN: 105437736900003 | info@eshcol.ae | Printed: ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
     <div class="summary">
-      <div class="card"><div class="card-label">Total Invoiced</div><div class="card-val">AED ${fc(totInv)}</div></div>
-      <div class="card"><div class="card-label">Total Paid</div><div class="card-val">AED ${fc(totPaid)}</div></div>
-      <div class="card"><div class="card-label">Outstanding</div><div class="card-val">AED ${fc(totBal)}</div></div>
+      <div class="card"><div class="card-label">Total Invoiced</div><div class="card-val">${fc(totInv)}</div></div>
+      <div class="card"><div class="card-label">Total Paid</div><div class="card-val">${fc(totPaid)}</div></div>
+      <div class="card"><div class="card-label">Outstanding</div><div class="card-val">${fc(totBal)}</div></div>
       <div class="card"><div class="card-label">Total Invoices</div><div class="card-val">${rows.length}</div></div>
     </div>
     <table>
@@ -1765,67 +1765,7 @@ function printLedger(){
       <tbody>${rowsHtml}</tbody>
     </table>
     <script>window.onload=()=>{window.print();}<\/script>
-  
-<!-- ── Post-Update Modal ── -->
-<div id="puOverlay" class="pu-overlay" onclick="if(event.target===this)closePuModal()">
-  <div class="pu-modal">
-    <div class="pu-title">📋 Post Update — <span id="puInvNo"></span></div>
-    <input type="hidden" id="puRecordId">
-    <div class="pu-grid">
-      <div class="pu-field">
-        <label>Invoice Type</label>
-        <input id="puType" readonly style="background:#f8f8f8;color:#888;">
-      </div>
-      <div class="pu-field">
-        <label>Status</label>
-        <select id="puStatus">
-          <option value="unpaid">Unpaid</option>
-          <option value="partial">Partial / Pending</option>
-          <option value="paid">Paid</option>
-        </select>
-      </div>
-      <div class="pu-field">
-        <label>Contract Value (AED)</label>
-        <input type="number" id="puContractVal" min="0" step="0.01">
-      </div>
-      <div class="pu-field">
-        <label>Invoice Amount (AED)</label>
-        <input type="number" id="puTot" min="0" step="0.01" readonly style="background:#f8f8f8;">
-      </div>
-      <div class="pu-field">
-        <label>Down Payment Received (AED)</label>
-        <input type="number" id="puDpAmt" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="pu-field">
-        <label>IPC Amount (AED)</label>
-        <input type="number" id="puIpcAmt" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="pu-field">
-        <label>Amount Paid (AED)</label>
-        <input type="number" id="puAmtPaid" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="pu-field">
-        <label>Balance Due (AED)</label>
-        <input type="number" id="puBalance" readonly style="background:#f8f8f8;color:#c0392b;font-weight:700;">
-      </div>
-      <div class="pu-field">
-        <label>Due Date</label>
-        <input type="date" id="puDueDate">
-      </div>
-      <div class="pu-field">
-        <label>Notes / Remarks</label>
-        <input type="text" id="puNotes" placeholder="Optional note">
-      </div>
-    </div>
-    <div id="puMsg" style="font-size:12px;color:#e8572a;min-height:18px;margin-bottom:6px;"></div>
-    <div class="pu-btns">
-      <button class="pu-btn pu-btn-cancel" onclick="closePuModal()">Cancel</button>
-      <button class="pu-btn pu-btn-save" onclick="savePostUpdate()">💾 Save Update</button>
-    </div>
-  </div>
-</div>
-
-</body></html>`);
+  </body></html>`);
   win.document.close();
 }
 
@@ -1849,17 +1789,30 @@ function openPostUpdate(id){
   document.getElementById('puDueDate').value = r.dueDate||'';
   document.getElementById('puNotes').value = r.notes||'';
   document.getElementById('puMsg').textContent='';
-  // Live balance calc
-  ['puDpAmt','puIpcAmt','puAmtPaid'].forEach(function(fid){
+  // Live auto-calculation: DP + IPC → Amount Paid → Balance
+  ['puDpAmt','puIpcAmt'].forEach(function(fid){
     document.getElementById(fid).oninput = calcPuBalance;
   });
+  // Trigger calc immediately on open to show correct values
+  calcPuBalance();
   document.getElementById('puOverlay').classList.add('show');
 }
 function calcPuBalance(){
-  var tot    = parseFloat(document.getElementById('puTot').value)||0;
-  var paid   = parseFloat(document.getElementById('puAmtPaid').value)||0;
-  var bal    = Math.max(0, tot - paid);
+  var tot   = parseFloat(document.getElementById('puTot').value)||0;
+  var dp    = parseFloat(document.getElementById('puDpAmt').value)||0;
+  var ipc   = parseFloat(document.getElementById('puIpcAmt').value)||0;
+  // Amount Paid = DP Received + IPC Amount (auto-calculated)
+  var paid  = dp + ipc;
+  document.getElementById('puAmtPaid').value = paid.toFixed(2);
+  var bal   = Math.max(0, tot - paid);
   document.getElementById('puBalance').value = bal.toFixed(2);
+  // Auto-set status
+  var stEl  = document.getElementById('puStatus');
+  if(tot > 0){
+    if(paid >= tot)       stEl.value = 'paid';
+    else if(paid > 0)     stEl.value = 'partial';
+    else                  stEl.value = 'unpaid';
+  }
 }
 function closePuModal(){
   document.getElementById('puOverlay').classList.remove('show');
@@ -1869,20 +1822,21 @@ function savePostUpdate(){
   var idx  = ledger.findIndex(function(x){return x.id===id;});
   if(idx===-1){ alert('Record not found.'); return; }
   var r    = ledger[idx];
-  var paid = parseFloat(document.getElementById('puAmtPaid').value)||0;
+  var dp   = parseFloat(document.getElementById('puDpAmt').value)||0;
+  var ipc  = parseFloat(document.getElementById('puIpcAmt').value)||0;
+  var paid = dp + ipc;  // Amount Paid = DP + IPC
   var tot  = parseFloat(document.getElementById('puTot').value)||0;
   // Update fields
   r.contractVal  = parseFloat(document.getElementById('puContractVal').value)||0;
-  r.dpAmt        = parseFloat(document.getElementById('puDpAmt').value)||0;
-  r.ipcAmt       = parseFloat(document.getElementById('puIpcAmt').value)||0;
+  r.dpAmt        = dp;
+  r.ipcAmt       = ipc;
   r.stdAmtPaid   = paid;
   r.balance      = Math.max(0, tot - paid);
   r.status       = document.getElementById('puStatus').value;
   r.dueDate      = document.getElementById('puDueDate').value;
   r.notes        = document.getElementById('puNotes').value;
   r.updatedAt    = new Date().toISOString();
-  // If paid fully, mark paid
-  if(paid >= tot && tot > 0) r.status = 'paid';
+  // Status already set correctly by calcPuBalance
   ledger[idx] = r;
   try{localStorage.setItem('ets_ledger', JSON.stringify(ledger));}catch(e){}
   closePuModal();
@@ -1898,39 +1852,47 @@ function savePostUpdate(){
 function viewPdfLedger(id){
   var r = ledger.find(function(x){return x.id===id;});
   if(!r){ alert('Record not found.'); return; }
-  // Populate the form fields so buildPdfDoc() works, then generate PDF
-  // We build PDF directly from the record
   genPdfFromRecord(r);
 }
 async function genPdfFromRecord(r){
-  if(!window.jspdf){
-    try{ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'); }catch(e){ alert('Could not load PDF library.'); return; }
-  }
-  // Temporarily load record into the form so buildPdfDoc() can use gv()
-  var fields={
-    invNo:r.invNo||'', invDate:r.date||'', dueDate:r.dueDate||'',
-    invSt:r.status||'unpaid', cur:r.cur||'AED', invType:r.type||'standard',
-    cName:r.clientName||'', cContact:r.clientContact||'', cAddr:r.clientAddr||'',
-    cPhone:r.clientPhone||'', cEmail:r.clientEmail||'', cTRN:r.clientTRN||'',
-    notes:r.notes||''
-  };
-  // Save current form state, inject record, build PDF, restore
+  // Save current form state
+  var fieldIds=['invNo','invDate','dueDate','invSt','cur','invType',
+    'cName','cContact','cAddr','cPhone','cEmail','cTRN','notes'];
   var saved={};
-  Object.keys(fields).forEach(function(k){
+  fieldIds.forEach(function(k){
     var el=document.getElementById(k);
-    if(el){saved[k]=el.value; el.value=fields[k];}
+    if(el) saved[k]=el.value;
   });
-  // Restore items
-  var savedItems = JSON.parse(JSON.stringify(items));
-  items = r.items&&r.items.length ? JSON.parse(JSON.stringify(r.items)) : [];
+  var savedItems=JSON.parse(JSON.stringify(items));
+
+  // Load record into form
+  var set=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
+  set('invNo',    r.invNo);
+  set('invDate',  r.date);
+  set('dueDate',  r.dueDate);
+  set('invSt',    r.status);
+  set('cur',      r.cur||'AED');
+  set('invType',  r.type||'standard');
+  set('cName',    r.clientName);
+  set('cContact', r.clientContact);
+  set('cAddr',    r.clientAddr);
+  set('cPhone',   r.clientPhone);
+  set('cEmail',   r.clientEmail);
+  set('cTRN',     r.clientTRN);
+  set('notes',    r.notes);
+  items = (r.items&&r.items.length) ? JSON.parse(JSON.stringify(r.items)) : [];
   renderItems();
-  var doc = buildPdfDoc();
-  // Restore
-  Object.keys(saved).forEach(function(k){var el=document.getElementById(k);if(el)el.value=saved[k];});
-  items = savedItems;
+
+  // Use the existing genPDF() function (which handles jsPDF loading + download)
+  await genPDF();
+
+  // Restore form
+  fieldIds.forEach(function(k){
+    var el=document.getElementById(k);
+    if(el) el.value=saved[k]||'';
+  });
+  items=savedItems;
   renderItems();
-  // Download
-  doc.save('Invoice_'+r.invNo+'.pdf');
 }
 
 // ══════════════════════════════════════════════
@@ -2044,7 +2006,7 @@ async function syncAllToDrive(silent){
       </div>
       <div class="pu-field">
         <label>Amount Paid (AED)</label>
-        <input type="number" id="puAmtPaid" min="0" step="0.01" placeholder="0.00">
+        <input type="number" id="puAmtPaid" min="0" step="0.01" readonly style="background:#f0f8ff;font-weight:700;color:#1a5276;" title="Auto-calculated: DP Received + IPC Amount">
       </div>
       <div class="pu-field">
         <label>Balance Due (AED)</label>
