@@ -126,13 +126,36 @@ body{background:#f2f2f2;display:flex;flex-direction:column;overflow:hidden}
 }
 
 /* ── LEDGER TAB ── */
-.ledger-panel{flex:1;background:#ffffff;overflow-y:auto;padding:16px}
-.ledger-toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
-.ledger-toolbar select,.ledger-toolbar input{padding:7px 10px;border-radius:5px;border:1px solid #d0d0d0;font-size:12px;background:#fff;color:#1a1a2e;font-family:'Roboto',sans-serif}
-.ledger-toolbar button{padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif}
+.ledger-panel{flex:1;background:#ffffff;overflow-y:auto;padding:12px 10px}
+.ledger-summary{margin-bottom:10px}
+/* ── Filter row: 2×2 on mobile, 4-col on desktop ── */
+.lt-filters{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}
+.lt-filters select{padding:9px 8px;border:1px solid #d0d0d0;border-radius:7px;font-size:13px;font-family:'Roboto',sans-serif;background:#fff;color:#1a1a2e;width:100%}
+/* ── Search row: input + button full width ── */
+.lt-search{display:flex;margin-bottom:8px;border-radius:7px;overflow:hidden;border:1px solid #d0d0d0}
+.lt-search input{flex:1;padding:10px 12px;border:none;font-size:13px;font-family:'Roboto',sans-serif;outline:none;color:#1a1a2e}
+.lt-search button{padding:10px 18px;border:none;background:#e8572a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+/* ── Action buttons: 2×2 grid on mobile, 4-col on desktop ── */
+.lt-buttons{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}
+.lt-buttons button{padding:11px 8px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;width:100%}
+.lt-btn-clear{background:#555;color:#fff}
+.lt-btn-excel{background:#1d7a40;color:#fff}
+.lt-btn-print{background:#0f7abf;color:#fff}
+.lt-btn-sync{background:#34a853;color:#fff}
+/* ── GD chip row: centered ── */
+.lt-gd{display:flex;justify-content:center;padding-bottom:8px}
+.lt-gd .gd-chip{font-size:12px;padding:8px 22px;border-radius:20px}
+/* ── Legacy toolbar hidden ── */
+.ledger-toolbar{display:none}
 .btn-add-ledger{background:#e8572a;color:#fff}
 .btn-export-xl{background:#1e7e34;color:#fff}
 .ledger-table-wrap{overflow-x:auto}
+/* ── Desktop: expand to horizontal ── */
+@media(min-width:700px){
+  .ledger-panel{padding:16px}
+  .lt-filters{grid-template-columns:repeat(4,1fr)}
+  .lt-buttons{grid-template-columns:repeat(4,1fr)}
+}
 table.ledger{width:100%;border-collapse:collapse;font-size:11px;min-width:900px}
 table.ledger th{background:#e8572a;color:#fff;padding:9px 8px;text-align:left;white-space:nowrap;font-size:10px;font-weight:700;border:1px solid #c94420;font-family:'Roboto',sans-serif;letter-spacing:.3px;text-transform:uppercase}
 table.ledger td{padding:7px 8px;border:1px solid #e8e8e8;vertical-align:middle;color:#1a1a2e;font-family:'Roboto',sans-serif}
@@ -527,7 +550,8 @@ table.ledger tr:hover td{background:#fff3ee}
 <div id="tab-ledger" style="display:none;flex:1;overflow:hidden">
   <div class="ledger-panel">
     <div class="ledger-summary" id="ledgerSummary"></div>
-    <div class="ledger-toolbar">
+    <!-- ── Row 2: Filters ── -->
+    <div class="lt-filters">
       <select id="filterYear" onchange="renderLedger()">
         <option value="all" selected>All Years</option>
         <option value="2025">2025</option>
@@ -556,13 +580,22 @@ table.ledger tr:hover td{background:#fff3ee}
         <option value="downpay">Down Payment</option>
         <option value="ipc">IPC</option>
       </select>
-      <input id="filterSearch" placeholder="🔍 Search invoice # or client" style="min-width:160px;flex:1;padding:7px 10px;border:1px solid #d0d0d0;border-radius:5px;font-size:12px" onkeydown="if(event.key==='Enter')renderLedger()">
-      <button onclick="renderLedger()" style="padding:7px 16px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;background:#e8572a;color:#fff">🔍 Search</button>
-      <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;background:#555;color:#fff">✕ Clear</button>
-      <button class="btn-export-xl" onclick="exportExcel()">📊 Export to Excel</button>
-      <button class="btn-print-ledger" onclick="printLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#0f7abf;color:#fff">🖨️ Print Ledger</button>
-      <button onclick="syncAllToDrive()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#34a853;color:#fff">☁️ Sync to Drive</button>
-      <span id="gdChip" class="gd-chip off" style="white-space:nowrap">⬤ Not connected</span>
+    </div>
+    <!-- ── Row 3: Search ── -->
+    <div class="lt-search">
+      <input id="filterSearch" placeholder="🔍 Search invoice # or client" onkeydown="if(event.key==='Enter')renderLedger()">
+      <button onclick="renderLedger()">🔍 Search</button>
+    </div>
+    <!-- ── Row 4: Action Buttons ── -->
+    <div class="lt-buttons">
+      <button class="lt-btn-clear"  onclick="clearLedgerFilters()">✕ Clear</button>
+      <button class="lt-btn-excel"  onclick="exportExcel()">📊 Export to Excel</button>
+      <button class="lt-btn-print"  onclick="printLedger()">🖨️ Print Ledger</button>
+      <button class="lt-btn-sync"   onclick="syncAllToDrive()">☁️ Sync to Drive</button>
+    </div>
+    <!-- ── Row 5: GD Status ── -->
+    <div class="lt-gd">
+      <span id="gdChip" class="gd-chip off">⬤ Not connected</span>
     </div>
     <div class="ledger-table-wrap">
       <table class="ledger" id="ledgerTable">
@@ -1275,13 +1308,13 @@ function renderLedger(){
   // Update summary div if present
   var sumDiv = document.getElementById('ledgerSummary');
   if(sumDiv){
-    sumDiv.innerHTML='<div style="display:flex;gap:12px;padding:10px 0;flex-wrap:wrap">'
-      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:14px">'+fc(totInv)+'</div></div>'
-      +'<div style="background:#e3f2fd;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">DP RECEIVED</div><div style="font-weight:700;color:#1565c0;font-size:14px">'+fc(totDP)+'</div></div>'
-      +'<div style="background:#f3e5f5;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">IPC CERTIFIED</div><div style="font-weight:700;color:#6a1b9a;font-size:14px">'+fc(totIPC)+'</div></div>'
-      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:14px">'+fc(totPaid)+'</div></div>'
-      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">OUTSTANDING BALANCE</div><div style="font-weight:700;color:#f57f17;font-size:14px">'+fc(totBal)+'</div></div>'
-      +'<div style="background:#fce4ec;border-radius:8px;padding:10px 16px;min-width:100px"><div style="font-size:10px;color:#888;margin-bottom:4px">TOTAL RECORDS</div><div style="font-weight:700;color:#c62828;font-size:14px">'+filtered.length+'</div></div>'
+    sumDiv.innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">'
+      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#888;margin-bottom:3px;white-space:nowrap">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:13px">'+fc(totInv)+'</div></div>'
+      +'<div style="background:#e3f2fd;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#888;margin-bottom:3px;white-space:nowrap">DP RECEIVED</div><div style="font-weight:700;color:#1565c0;font-size:13px">'+fc(totDP)+'</div></div>'
+      +'<div style="background:#f3e5f5;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#888;margin-bottom:3px;white-space:nowrap">IPC CERTIFIED</div><div style="font-weight:700;color:#6a1b9a;font-size:13px">'+fc(totIPC)+'</div></div>'
+      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#888;margin-bottom:3px;white-space:nowrap">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:13px">'+fc(totPaid)+'</div></div>'
+      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#888;margin-bottom:3px;white-space:nowrap">OUTSTANDING</div><div style="font-weight:700;color:#f57f17;font-size:13px">'+fc(totBal)+'</div></div>'
+      +'<div style="background:#fce4ec;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#888;margin-bottom:3px;white-space:nowrap">TOTAL RECORDS</div><div style="font-weight:700;color:#c62828;font-size:20px;line-height:1">'+filtered.length+'</div></div>'
       +'</div>';
   }
   // Table body — all 14 columns
