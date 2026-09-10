@@ -531,9 +531,9 @@ table.ledger tr:hover td{background:#fff3ee}
         <option value="downpay">Down Payment</option>
         <option value="ipc">IPC</option>
       </select>
-      <input id="filterSearch" placeholder="🔍 Search invoice # or client" style="min-width:180px;flex:1" onkeydown="if(event.key==='Enter')renderLedger()">
-      <button onclick="renderLedger()" style="padding:7px 16px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#e8572a;color:#fff;white-space:nowrap">🔍 Search</button>
-      <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#666;color:#fff;white-space:nowrap">✕ Clear</button>
+      <input id="filterSearch" placeholder="🔍 Search invoice # or client" style="min-width:160px;flex:1;padding:7px 10px;border:1px solid #d0d0d0;border-radius:5px;font-size:12px" onkeydown="if(event.key==='Enter')renderLedger()">
+      <button onclick="renderLedger()" style="padding:7px 16px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;background:#e8572a;color:#fff">🔍 Search</button>
+      <button onclick="clearLedgerFilters()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;background:#555;color:#fff">✕ Clear</button>
       <button class="btn-export-xl" onclick="exportExcel()">📊 Export to Excel</button>
       <button class="btn-print-ledger" onclick="printLedger()" style="padding:7px 14px;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Roboto',sans-serif;background:#0f7abf;color:#fff">🖨️ Print Ledger</button>
     </div>
@@ -954,22 +954,16 @@ function pushToLedgerLocal(record){
   seq++;
   try{ localStorage.setItem('ets_ledger', JSON.stringify(ledger)); }catch(e){}
   try{ localStorage.setItem('ets_seq',    String(seq));            }catch(e){}
-  // Reset ALL filters so the new record is ALWAYS visible
-  var fyEl=document.getElementById('filterYear');
-  var fmEl=document.getElementById('filterMonth');
-  var fsEl=document.getElementById('filterStatus');
-  var ftEl=document.getElementById('filterType');
-  var fqEl=document.getElementById('filterSearch');
-  if(fyEl) fyEl.value='all';
-  if(fmEl) fmEl.value='all';
-  if(fsEl) fsEl.value='all';
-  if(ftEl) ftEl.value='all';
-  if(fqEl) fqEl.value='';
+  // Reset ALL filters so the saved record is ALWAYS visible
+  ['filterYear','filterMonth','filterStatus','filterType'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='all';
+  });
+  var fq=document.getElementById('filterSearch'); if(fq) fq.value='';
   resetForm();
   renderLedger();
   // Auto-switch to Invoice Ledger tab
-  var ledTab=document.querySelector('.tab[onclick*="ledger"]');
-  if(ledTab) switchTab('ledger', ledTab);
+  var tabs=document.querySelectorAll('.tab');
+  tabs.forEach(function(t){ if((t.onclick||'').toString().includes('ledger')||(t.getAttribute('onclick')||'').includes('ledger')) t.click(); });
 }
 
 function resetForm(){
@@ -1001,23 +995,17 @@ function resetForm(){
 
 // ── Show status message ──
 function showSavedMsg(text,type){
-  const msg=document.getElementById('statusMsg');
-  if(msg){
-    msg.className='smsg '+(type||'ok');
-    msg.textContent=text;
-    msg.style.display='block';
-    setTimeout(()=>{msg.style.display='none';},5000);
-  }
-  if(!msg && type==='err') setTimeout(()=>alert(text),50);
+  var msg=document.getElementById('statusMsg');
+  if(msg){msg.className='smsg '+(type||'ok');msg.textContent=text;msg.style.display='block';setTimeout(function(){msg.style.display='none';},5000);}
+  else{ setTimeout(function(){alert(text);},100); }
 }
 
 // ── Open/close modal ──
 function saveToLedger(){
-  // Save directly to device — no popup, instant save
-  const record = buildRecord();
-  if(!record.invNo){ alert('Please fill in Invoice details before saving.'); return; }
+  var record = buildRecord();
+  if(!record.invNo){ alert('Please fill in the Invoice Number before saving.'); return; }
   pushToLedgerLocal(record);
-  showSavedMsg('✅ Invoice #'+record.invNo+' saved to Ledger!','ok');
+  showSavedMsg('✅ Invoice #'+record.invNo+' saved! Check Invoice Ledger tab.','ok');
 }
 function closeGdModal(){
   document.getElementById('gdOverlay').classList.remove('show');
@@ -1204,7 +1192,7 @@ async function gdSave(){
 // LEDGER RENDER
 // ══════════════════════════════════════════════
 function clearLedgerFilters(){
-  ['filterYear','filterMonth','filterStatus','filterType'].forEach(id=>{
+  ['filterYear','filterMonth','filterStatus','filterType'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='all';
   });
   var fq=document.getElementById('filterSearch'); if(fq) fq.value='';
@@ -1214,7 +1202,7 @@ function clearLedgerFilters(){
 function renderLedger(){
   // Always reload fresh from localStorage
   try{var raw=localStorage.getItem('ets_ledger');if(raw){var p=JSON.parse(raw);if(Array.isArray(p))ledger=p;}}catch(e){}
-  // Read filters – treat 'all' as no filter
+  // Read filters
   var fyr  = document.getElementById('filterYear')   ? document.getElementById('filterYear').value   : 'all';
   var fmon = document.getElementById('filterMonth')  ? document.getElementById('filterMonth').value  : 'all';
   var fst  = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : 'all';
@@ -1223,52 +1211,63 @@ function renderLedger(){
   var mon  = (fmon === 'all') ? '' : fmon;
   var st   = (fst  === 'all') ? '' : fst;
   var tp   = (ftp  === 'all') ? '' : ftp;
-  const srch= gv('filterSearch').toLowerCase();
-  let filtered=ledger.filter(r=>{
-    if(yr && !r.date.startsWith(yr)) return false;
-    // Month: pad to 2 digits so '9' matches '2026-09' not '2026-09' AND '2026-10' etc
-    if(mon && yr){
-      const mm=mon.padStart(2,'0');
-      if(!r.date.startsWith(yr+'-'+mm)) return false;
-    }
+  var srch = document.getElementById('filterSearch') ? (document.getElementById('filterSearch').value||'').toLowerCase() : '';
+  var filtered = ledger.filter(function(r){
+    if(yr && !(r.date||'').startsWith(yr)) return false;
+    if(mon && yr){ var mm=('0'+mon).slice(-2); if(!(r.date||'').startsWith(yr+'-'+mm)) return false; }
     if(st && r.status!==st) return false;
     if(tp && r.type!==tp) return false;
-    if(srch && !(
-      (r.invNo||'').toLowerCase().includes(srch)||
-      (r.clientName||'').toLowerCase().includes(srch)||
-      (r.clientEmail||'').toLowerCase().includes(srch)
-    )) return false;
+    if(srch && !((r.invNo||'').toLowerCase().includes(srch)||(r.clientName||'').toLowerCase().includes(srch))) return false;
     return true;
   });
-  // KPI cards
-  const totInv  = filtered.reduce((s,r)=>s+r.tot,0);
-  const totPaid = filtered.filter(r=>r.status==='paid').reduce((s,r)=>s+r.tot,0);
-  const totUnp  = filtered.filter(r=>r.status==='unpaid').reduce((s,r)=>s+r.tot,0);
-  const totBal  = filtered.reduce((s,r)=>s+(r.balance||0),0);
-  document.getElementById('kpiInv') .textContent='AED '+fc(totInv);
-  document.getElementById('kpiPaid').textContent='AED '+fc(totPaid);
-  document.getElementById('kpiUnp') .textContent='AED '+fc(totUnp);
-  document.getElementById('kpiBal') .textContent='AED '+fc(totBal);
-  // Table
-  const tbody=document.getElementById('ledgerBody');
+  // KPI cards — null-safe
+  var totInv  = filtered.reduce(function(s,r){return s+(r.tot||0);},0);
+  var totPaid = filtered.filter(function(r){return r.status==='paid';}).reduce(function(s,r){return s+(r.tot||0);},0);
+  var totUnp  = filtered.filter(function(r){return r.status==='unpaid';}).reduce(function(s,r){return s+(r.tot||0);},0);
+  var totBal  = filtered.reduce(function(s,r){return s+(r.balance||0);},0);
+  var kpiInv  = document.getElementById('kpiInv');  if(kpiInv)  kpiInv.textContent  = 'AED '+fc(totInv);
+  var kpiPaid = document.getElementById('kpiPaid'); if(kpiPaid) kpiPaid.textContent = 'AED '+fc(totPaid);
+  var kpiUnp  = document.getElementById('kpiUnp');  if(kpiUnp)  kpiUnp.textContent  = 'AED '+fc(totUnp);
+  var kpiBal  = document.getElementById('kpiBal');  if(kpiBal)  kpiBal.textContent  = 'AED '+fc(totBal);
+  // Update summary div if present
+  var sumDiv = document.getElementById('ledgerSummary');
+  if(sumDiv){
+    sumDiv.innerHTML='<div style="display:flex;gap:16px;padding:10px 0;flex-wrap:wrap">'
+      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:15px">AED '+fc(totInv)+'</div></div>'
+      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:15px">AED '+fc(totPaid)+'</div></div>'
+      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">OUTSTANDING</div><div style="font-weight:700;color:#f57f17;font-size:15px">AED '+fc(totUnp)+'</div></div>'
+      +'<div style="background:#fce4ec;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL RECORDS</div><div style="font-weight:700;color:#c62828;font-size:15px">'+filtered.length+'</div></div>'
+      +'</div>';
+  }
+  // Table body — all 14 columns
+  var tbody = document.getElementById('ledgerBody');
+  if(!tbody) return;
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="9" class="no-data">No records found.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="14" style="text-align:center;padding:30px;color:#888;font-size:13px">No records found. Try clearing filters or save an invoice first.</td></tr>';
     return;
   }
-  const typeLabel={standard:'Standard',downpay:'Down Payment',ipc:'IPC'};
-  const typeBadge={standard:'badge-type-std',downpay:'badge-type-dp',ipc:'badge-type-ipc'};
-  tbody.innerHTML=filtered.map(r=>`
-    <tr>
-      <td>${r.invNo}</td>
-      <td>${fmtD(r.date)}</td>
-      <td>${r.clientName||''}</td>
-      <td><span class="badge ${typeBadge[r.type]||'badge-type-std'}">${typeLabel[r.type]||r.type}</span></td>
-      <td style="text-align:right">${fc2(r.tot,r.cur)}</td>
-      <td style="text-align:right">${fc2(r.balance||0,r.cur)}</td>
-      <td>${fmtD(r.dueDate)}</td>
-      <td><span class="badge badge-${r.status}">${r.status.toUpperCase()}</span></td>
-      <td><button onclick="deleteLedger(${r.id})" style="background:#e74c3c;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px">Delete</button></td>
-    </tr>`).join('');
+  var typeLabel={standard:'Standard',downpay:'Down Payment',ipc:'IPC'};
+  var typeBadge={standard:'badge-type-std',downpay:'badge-type-dp',ipc:'badge-type-ipc'};
+  tbody.innerHTML=filtered.map(function(r){
+    var pct = r.type==='downpay'?(r.dpPct||0)+'%':r.type==='ipc'?(r.ipcThisPct||0).toFixed(1)+'%':'100%';
+    var amtPaid = r.status==='paid'?(r.tot||0):(r.stdAmtPaid||0);
+    return '<tr>'
+      +'<td>'+(r.invNo||'')+'</td>'
+      +'<td>'+fmtD(r.date)+'</td>'
+      +'<td>'+(r.clientName||'')+'</td>'
+      +'<td><span class="badge '+(typeBadge[r.type]||'badge-type-std')+'">'+(typeLabel[r.type]||r.type||'')+'</span></td>'
+      +'<td style="text-align:right">'+fc2(r.contractVal||r.tot||0,r.cur)+'</td>'
+      +'<td style="text-align:center">'+pct+'</td>'
+      +'<td style="text-align:right">'+fc2(r.tot||0,r.cur)+'</td>'
+      +'<td style="text-align:right">'+fc2(r.dpAmt||0,r.cur)+'</td>'
+      +'<td style="text-align:right">'+fc2(r.ipcAmt||0,r.cur)+'</td>'
+      +'<td style="text-align:right">'+fc2(amtPaid,r.cur)+'</td>'
+      +'<td style="text-align:right">'+fc2(r.balance||0,r.cur)+'</td>'
+      +'<td>'+fmtD(r.dueDate)+'</td>'
+      +'<td><span class="badge badge-'+(r.status||'unpaid')+'">'+(r.status||'unpaid').toUpperCase()+'</span></td>'
+      +'<td><button onclick="deleteLedger('+(r.id||0)+')" style="background:#e74c3c;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px">🗑</button></td>'
+    +'</tr>';
+  }).join('');
 }
 
 function deleteLedger(id){

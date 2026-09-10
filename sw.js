@@ -1,7 +1,5 @@
-const CACHE='ets-invoice-v17';
-const ASSETS=['./index.html','./icon-192.png','./icon-512.png',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
+const CACHE='ets-invoice-v18';
+const ASSETS=['./index.html','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()));
 });
