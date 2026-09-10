@@ -1253,14 +1253,21 @@ function renderLedger(){
   });
   // KPI cards — null-safe
   var totInv  = filtered.reduce(function(s,r){return s+(r.tot||0);},0);
-  // TOTAL PAID = actual money received: stdAmtPaid for partial, tot for fully paid
+  // TOTAL DP RECEIVED = sum of dpAmt across all records
+  var totDP   = filtered.reduce(function(s,r){return s+(r.dpAmt||0);},0);
+  // TOTAL IPC CERTIFIED = sum of ipcAmt across all records
+  var totIPC  = filtered.reduce(function(s,r){return s+(r.ipcAmt||0);},0);
+  // TOTAL PAID = actual money received:
+  //   paid→r.tot | partial with stdAmtPaid→stdAmtPaid | downpay→dpAmt | ipc→ipcAmt
   var totPaid = filtered.reduce(function(s,r){
     if(r.status==='paid') return s+(r.tot||0);
-    return s+(r.stdAmtPaid||0);
+    if(r.stdAmtPaid>0) return s+(r.stdAmtPaid||0);
+    // fallback: use dpAmt+ipcAmt if stdAmtPaid not yet set via Post-Update
+    return s+(r.dpAmt||0)+(r.ipcAmt||0);
   },0);
   // OUTSTANDING = sum of remaining balance on ALL records
   var totBal  = filtered.reduce(function(s,r){return s+(r.balance||0);},0);
-  var totUnp  = totBal; // Outstanding = total balance (not just unpaid-status invoices)
+  var totUnp  = totBal;
   var kpiInv  = document.getElementById('kpiInv');  if(kpiInv)  kpiInv.textContent  = fc(totInv);
   var kpiPaid = document.getElementById('kpiPaid'); if(kpiPaid) kpiPaid.textContent = fc(totPaid);
   var kpiUnp  = document.getElementById('kpiUnp');  if(kpiUnp)  kpiUnp.textContent  = fc(totUnp);
@@ -1268,11 +1275,13 @@ function renderLedger(){
   // Update summary div if present
   var sumDiv = document.getElementById('ledgerSummary');
   if(sumDiv){
-    sumDiv.innerHTML='<div style="display:flex;gap:16px;padding:10px 0;flex-wrap:wrap">'
-      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:15px">'+fc(totInv)+'</div></div>'
-      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:15px">'+fc(totPaid)+'</div></div>'
-      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">OUTSTANDING BALANCE</div><div style="font-weight:700;color:#f57f17;font-size:15px">'+fc(totBal)+'</div></div>'
-      +'<div style="background:#fce4ec;border-radius:8px;padding:10px 18px;min-width:140px"><div style="font-size:11px;color:#888;margin-bottom:4px">TOTAL RECORDS</div><div style="font-weight:700;color:#c62828;font-size:15px">'+filtered.length+'</div></div>'
+    sumDiv.innerHTML='<div style="display:flex;gap:12px;padding:10px 0;flex-wrap:wrap">'
+      +'<div style="background:#fff3e0;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">TOTAL INVOICED</div><div style="font-weight:700;color:#e8572a;font-size:14px">'+fc(totInv)+'</div></div>'
+      +'<div style="background:#e3f2fd;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">DP RECEIVED</div><div style="font-weight:700;color:#1565c0;font-size:14px">'+fc(totDP)+'</div></div>'
+      +'<div style="background:#f3e5f5;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">IPC CERTIFIED</div><div style="font-weight:700;color:#6a1b9a;font-size:14px">'+fc(totIPC)+'</div></div>'
+      +'<div style="background:#e8f5e9;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">TOTAL PAID</div><div style="font-weight:700;color:#2e7d32;font-size:14px">'+fc(totPaid)+'</div></div>'
+      +'<div style="background:#fff8e1;border-radius:8px;padding:10px 16px;min-width:130px"><div style="font-size:10px;color:#888;margin-bottom:4px">OUTSTANDING BALANCE</div><div style="font-weight:700;color:#f57f17;font-size:14px">'+fc(totBal)+'</div></div>'
+      +'<div style="background:#fce4ec;border-radius:8px;padding:10px 16px;min-width:100px"><div style="font-size:10px;color:#888;margin-bottom:4px">TOTAL RECORDS</div><div style="font-weight:700;color:#c62828;font-size:14px">'+filtered.length+'</div></div>'
       +'</div>';
   }
   // Table body — all 14 columns
@@ -1715,6 +1724,9 @@ function printLedger(){
   const rows=ledger;
   if(!rows.length){alert('No ledger records to print.');return;}
   const typeLabel={standard:'Standard',downpay:'Down Payment',ipc:'IPC'};
+  // TOTAL PAID for print (same logic as renderLedger)
+  const totDP  = rows.reduce((s,r)=>s+(r.dpAmt||0),0);
+  const totIPC = rows.reduce((s,r)=>s+(r.ipcAmt||0),0);
   const rowsHtml=rows.map((r,i)=>`
     <tr>
       <td>${r.invNo}</td>
@@ -1722,13 +1734,14 @@ function printLedger(){
       <td>${r.clientName||'—'}</td>
       <td>${typeLabel[r.type]||r.type}</td>
       <td style="text-align:right">${fc2(r.tot,r.cur)}</td>
+      <td style="text-align:right">${fc2(r.dpAmt||0,r.cur)}</td>
+      <td style="text-align:right">${fc2(r.ipcAmt||0,r.cur)}</td>
       <td style="text-align:right">${fc2(r.balance||0,r.cur)}</td>
-      <td>${fmtD(r.dueDate)}</td>
       <td style="text-align:center;font-weight:700;color:${r.status==='paid'?'#27ae60':r.status==='unpaid'?'#c0392b':'#f39c12'}">${r.status.toUpperCase()}</td>
     </tr>`).join('');
 
   const totInv   = rows.reduce((s,r)=>s+r.tot,0);
-  const totPaid  = rows.reduce((s,r)=>r.status==='paid'?s+(r.tot||0):s+(r.stdAmtPaid||0),0);
+  const totPaid  = rows.reduce((s,r)=>{if(r.status==='paid')return s+(r.tot||0);if(r.stdAmtPaid>0)return s+(r.stdAmtPaid||0);return s+(r.dpAmt||0)+(r.ipcAmt||0);},0);
   const totBal   = rows.reduce((s,r)=>s+(r.balance||0),0);
 
   const win=window.open('','_blank','width=900,height=700');
@@ -1756,6 +1769,8 @@ function printLedger(){
     <div class="sub">TRN: 105437736900003 | info@eshcol.ae | Printed: ${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
     <div class="summary">
       <div class="card"><div class="card-label">Total Invoiced</div><div class="card-val">${fc(totInv)}</div></div>
+      <div class="card"><div class="card-label">DP Received</div><div class="card-val" style="color:#1565c0">${fc(totDP)}</div></div>
+      <div class="card"><div class="card-label">IPC Certified</div><div class="card-val" style="color:#6a1b9a">${fc(totIPC)}</div></div>
       <div class="card"><div class="card-label">Total Paid</div><div class="card-val">${fc(totPaid)}</div></div>
       <div class="card"><div class="card-label">Outstanding</div><div class="card-val">${fc(totBal)}</div></div>
       <div class="card"><div class="card-label">Total Invoices</div><div class="card-val">${rows.length}</div></div>
@@ -1763,7 +1778,7 @@ function printLedger(){
     <table>
       <thead><tr>
         <th>Invoice #</th><th>Date</th><th>Client</th><th>Type</th>
-        <th>Amount</th><th>Balance</th><th>Due Date</th><th>Status</th>
+        <th style="text-align:right">Amount</th><th style="text-align:right">DP Recd</th><th style="text-align:right">IPC Amt</th><th style="text-align:right">Balance</th><th>Status</th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
