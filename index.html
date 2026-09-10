@@ -675,6 +675,22 @@ function switchTab(name, el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   if(name==='ledger'){ renderLedger(); updateGdChip(); }
+  if(name==='invoice'){
+    // Force typeBand to correct state every time invoice tab is shown
+    // Use rAF to ensure it runs AFTER the browser has painted the tab visible
+    requestAnimationFrame(function(){
+      var invType = document.getElementById('invType');
+      var tb = document.getElementById('typeBand');
+      if(invType && tb){
+        if(invType.value === 'standard'){
+          tb.style.display = 'none';
+          tb.className = 'type-band standard';
+        } else {
+          onTypeChange();
+        }
+      }
+    });
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1035,10 +1051,13 @@ function resetForm(){
   document.getElementById('dueDate').value=due.toISOString().split('T')[0];
   document.getElementById('invSt').value='unpaid';
   document.getElementById('invType').value='standard';
-  onTypeChange(); // reset Down Payment / IPC section visibility
-  // Belt-and-suspenders: force hide typeBand directly
+  // Hide typeBand immediately AND after next paint (belt+suspenders for Android)
   var tb=document.getElementById('typeBand');
-  if(tb){ tb.style.display='none'; tb.className='type-band standard'; }
+  if(tb){ tb.style.display='none'; tb.className='type-band standard'; tb.innerHTML=''; }
+  requestAnimationFrame(function(){
+    var tb2=document.getElementById('typeBand');
+    if(tb2){ tb2.style.display='none'; tb2.className='type-band standard'; tb2.innerHTML=''; }
+  });
   document.getElementById('cName').value='';
   document.getElementById('cContact').value='';
   document.getElementById('cAddr').value='';
