@@ -1295,7 +1295,9 @@ function renderLedger(){
   var typeBadge={standard:'badge-type-std',downpay:'badge-type-dp',ipc:'badge-type-ipc'};
   tbody.innerHTML=filtered.map(function(r){
     var pct = r.type==='downpay'?(r.dpPct||0)+'%':r.type==='ipc'?(r.ipcThisPct||0).toFixed(1)+'%':'100%';
-    var amtPaid = r.status==='paid'?(r.tot||0):(r.stdAmtPaid||0);
+    var amtPaid = r.status==='paid'?(r.tot||0)
+                 :(r.stdAmtPaid>0?(r.stdAmtPaid||0)
+                 :((r.dpAmt||0)+(r.ipcAmt||0)));
     return '<tr>'
       +'<td>'+(r.invNo||'')+'</td>'
       +'<td>'+fmtD(r.date)+'</td>'
@@ -1957,7 +1959,9 @@ async function syncAllToDrive(silent){
     // Build all rows
     var typeLabel={standard:'Standard Invoice',downpay:'Down Payment',ipc:'IPC'};
     var rows = ledger.map(function(r){
-      var amtPaid = r.status==='paid'?(r.tot||0):(r.stdAmtPaid||0);
+      var amtPaid = r.status==='paid'?(r.tot||0)
+                 :(r.stdAmtPaid>0?(r.stdAmtPaid||0)
+                 :((r.dpAmt||0)+(r.ipcAmt||0)));
       return [
         r.invNo||'', r.date||'', r.clientName||'',
         typeLabel[r.type]||r.type||'',
