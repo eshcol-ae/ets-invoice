@@ -1036,6 +1036,9 @@ function resetForm(){
   document.getElementById('invSt').value='unpaid';
   document.getElementById('invType').value='standard';
   onTypeChange(); // reset Down Payment / IPC section visibility
+  // Belt-and-suspenders: force hide typeBand directly
+  var tb=document.getElementById('typeBand');
+  if(tb){ tb.style.display='none'; tb.className='type-band standard'; }
   document.getElementById('cName').value='';
   document.getElementById('cContact').value='';
   document.getElementById('cAddr').value='';
@@ -1945,6 +1948,7 @@ async function genPdfFromRecord(r){
   });
   items=savedItems;
   renderItems();
+  onTypeChange(); // restore typeBand to correct state for the current form
 }
 
 // ══════════════════════════════════════════════
